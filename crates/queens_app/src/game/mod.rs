@@ -22,7 +22,17 @@ impl Plugin for GamePlugin {
         app.init_resource::<interaction::PaintStroke>()
             .add_systems(OnEnter(AppState::Playing), spawn_screen)
             .add_systems(OnExit(AppState::Playing), leave_game)
-            .add_systems(OnEnter(PlayState::Paused), spawn_pause_overlay)
+            // `refresh_board` also runs every frame below, gated on change
+            // detection, but that alone can leave marks visible on a paused
+            // board for a stretch under `WinitSettings::reactive`, which only
+            // redraws promptly on a real window or input event, not a bare
+            // state mutation. Running it here ties concealment to the same
+            // transition the overlay itself reacts to.
+            .add_systems(
+                OnEnter(PlayState::Paused),
+                (spawn_pause_overlay, board::refresh_board),
+            )
+            .add_systems(OnExit(PlayState::Paused), board::refresh_board)
             .add_systems(OnEnter(PlayState::Won), (record_win, spawn_victory_overlay))
             .add_systems(
                 Update,

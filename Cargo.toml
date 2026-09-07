@@ -9,9 +9,15 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 queens_core = { path = "crates/queens_core" }
+# Default features pull in the whole 3D pipeline (bevy_pbr, bevy_gltf, KTX2,
+# morph animation) and the audio engine, none of which this 2D UI game
+# reaches; dropping them cuts the release binary by about a fifth.
 # `system_clipboard` is off by default, and without it `Clipboard` writes to an
 # in-process buffer the rest of the desktop never sees.
-bevy = { version = "0.19.1", features = ["system_clipboard"] }
+bevy = { version = "0.19.1", default-features = false, features = [
+    "ui",
+    "system_clipboard",
+] }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 dirs = "7"
@@ -28,3 +34,5 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+opt-level = "z"
+panic = "abort"
