@@ -79,7 +79,7 @@ const REGIONS_COLOURBLIND: [Color; 12] = [
 
 /// The colour of a region. Wraps if a board ever exceeds the palette, though
 /// `MAX_SIZE` keeps that from happening.
-pub fn region_color(region: u8, colourblind: bool) -> Color {
+pub fn region_colour(region: u8, colourblind: bool) -> Color {
     let palette = if colourblind {
         &REGIONS_COLOURBLIND
     } else {

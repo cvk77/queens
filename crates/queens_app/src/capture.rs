@@ -525,7 +525,12 @@ fn run_script(
     let mut pointer = Vec::new();
     let mut checks = Vec::new();
 
-    while run.next_beat < SCRIPT.len() && SCRIPT[run.next_beat].seconds <= run.elapsed {
+    // At most one beat per frame, even when several have fallen due after a
+    // slow frame. A beat that asserts something reads state gathered at the top
+    // of its own frame, so sharing a frame with the beat that set that state up
+    // would have it looking at the position from before. Beats that pile up are
+    // simply played out on consecutive frames.
+    if run.next_beat < SCRIPT.len() && SCRIPT[run.next_beat].seconds <= run.elapsed {
         let beat = &SCRIPT[run.next_beat];
         run.next_beat += 1;
 

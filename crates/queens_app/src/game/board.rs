@@ -91,7 +91,7 @@ fn spawn_cell(grid: &mut ChildSpawnerCommands, puzzle: &Puzzle, coord: Coord, sa
             align_items: AlignItems::Center,
             ..default()
         },
-        BackgroundColor(theme::region_color(
+        BackgroundColor(theme::region_colour(
             puzzle.region_at(coord),
             save.settings.colourblind,
         )),
@@ -306,7 +306,7 @@ pub fn refresh_board(
     let hint_cell = hint.and_then(|hint| hint.cell());
     // Colour says what the hint wants: green to place a queen, red for a mark
     // that does not belong, blue for a cell to cross off.
-    let hint_color = match hint.map(|hint| &hint.kind) {
+    let hint_colour = match hint.map(|hint| &hint.kind) {
         Some(HintKind::Place(_)) => theme::SUCCESS,
         Some(HintKind::IncorrectQueen(_) | HintKind::IncorrectCross(_)) => theme::DANGER,
         _ => theme::ACCENT,
@@ -320,12 +320,12 @@ pub fn refresh_board(
         } else if session.conflicts.contains(&cell.coord) {
             theme::DANGER
         } else if hint_cell == Some(cell.coord) {
-            hint_color
+            hint_colour
         } else {
             Color::NONE
         };
 
-        background.0 = theme::region_color(
+        background.0 = theme::region_colour(
             session.puzzle.region_at(cell.coord),
             save.settings.colourblind,
         );
