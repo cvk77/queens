@@ -11,7 +11,7 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 73 tests + 1 doctest
+cargo test --workspace                      # 82 tests + 1 doctest
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p queens_app                     # play
@@ -32,6 +32,11 @@ else machine-dependent to the generator.
 **Any change to generation bumps `SAVE_VERSION`** (`persistence.rs`). Otherwise
 a resume restores the player's marks onto a different board, which is worse than
 losing the save.
+
+**A new save field is `#[serde(default)]`, not a version bump.** A bump throws
+the file away, and with it the player's whole record; a defaulted field lets an
+older file load and start counting from zero. Bump only when an old file would
+be *wrong* rather than merely incomplete.
 
 **`queens_core` never depends on Bevy.** It is what makes the generator testable
 at scale.
@@ -100,6 +105,13 @@ drawn from UI nodes for the same reason. Doc comments and Markdown are fine.
   local `color: Color`).
 - Tests are named as the property they establish
   (`removing_a_queen_takes_its_auto_crosses_with_it`), not `test_foo`.
+- **A hint never names its rule, and never uses solver vocabulary.** It says
+  what was seen and what follows, naming rows and columns by their numbers and
+  regions by their colour, so the player can check it against the board. "A
+  locked set uses up column 5" is what this replaced. `RuleId::name` and
+  `RuleId::description` are for the CLI audit and the docs: nothing on the play
+  screen names a rule, and the game never says in advance which steps a puzzle
+  will need.
 - `cargo fmt` and a clippy run with `-D warnings` both pass; CI enforces them.
 
 ## Known rough edges

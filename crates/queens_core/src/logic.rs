@@ -38,6 +38,14 @@ impl Family {
             Family::Regions => "region",
         }
     }
+
+    const fn plural(self) -> &'static str {
+        match self {
+            Family::Rows => "rows",
+            Family::Columns => "columns",
+            Family::Regions => "regions",
+        }
+    }
 }
 
 /// A single constraint: one row, one column or one region.
@@ -109,6 +117,27 @@ impl<'a> RegionNames<'a> {
             None => format!("region {}", index + 1),
         }
     }
+
+    /// Names several regions at once: "the coral and teal regions", or
+    /// "regions 4 and 7" with no colours to draw on. All or nothing, so a
+    /// list never mixes a colour with a number.
+    fn group(self, indices: &[u8]) -> String {
+        let named: Option<Vec<String>> = indices
+            .iter()
+            .map(|&i| {
+                self.names
+                    .get(usize::from(i))
+                    .map(|name| (*name).to_string())
+            })
+            .collect();
+        match named {
+            Some(names) => format!("the {} regions", join_with_and(&names)),
+            None => {
+                let numbers: Vec<String> = indices.iter().map(|&i| (i + 1).to_string()).collect();
+                format!("regions {}", join_with_and(&numbers))
+            }
+        }
+    }
 }
 
 /// What a deduction concluded.
@@ -125,55 +154,103 @@ pub enum Action {
 pub struct Step {
     pub rule: RuleId,
     pub action: Action,
-    /// The unit the deduction reasoned from.
-    pub subject: Option<Unit>,
-    /// The unit the conclusion lands in, for rules that relate two units.
-    pub object: Option<Unit>,
+    /// The units the deduction reasoned from. One for most rules; a locked set
+    /// reasons from `k` of them at once and the explanation has to name them
+    /// all, or the player is left hunting for a set they were never shown.
+    pub subjects: Vec<Unit>,
+    /// The units the conclusion lands in, for rules that relate two groups.
+    pub objects: Vec<Unit>,
 }
 
 impl Step {
     /// An explanation phrased for the player.
+    ///
+    /// Every sentence states what was seen and what follows from it, in the
+    /// board's own terms, rather than naming the rule: a hint the player has to
+    /// look up is not a hint. The rule's own name and gloss are available
+    /// separately from [`RuleId::name`] and [`RuleId::description`].
     pub fn explain(&self, names: RegionNames<'_>) -> String {
-        match (&self.action, self.subject, self.object) {
+        let subject = || label_units(&self.subjects, names);
+        let object = || label_units(&self.objects, names);
+        match (&self.action, self.subjects.first(), self.objects.first()) {
             (Action::Place(cell), Some(unit), _) => format!(
                 "{} has only one cell left for its queen: r{}c{}.",
                 capitalise(&unit.label(names)),
                 cell.row + 1,
                 cell.col + 1
             ),
-            (Action::Eliminate(_), Some(subject), Some(object)) => match self.rule {
+            (Action::Eliminate(_), Some(_), Some(_)) => match self.rule {
                 // Naming the unit whose queen is accounted for matters: the
                 // conclusion is about the object, not the subject it came from.
                 RuleId::LineConfinement | RuleId::RegionConfinement => format!(
                     "Every remaining cell of {} lies in {}, so the queen of {} must be one of them and the rest of {} can be crossed off.",
-                    subject.label(names),
-                    object.label(names),
-                    object.label(names),
-                    object.label(names)
+                    subject(),
+                    object(),
+                    object(),
+                    object()
                 ),
+                // Spelled out in full rather than called a locked set: the
+                // whole difficulty of the move is seeing which units make up
+                // the set, so naming them is the explanation.
                 RuleId::SetElimination => format!(
-                    "A locked set starting at {} uses up {} entirely.",
-                    subject.label(names),
-                    object.label(names)
+                    "Between them, {} can only reach {}, so those are spoken for and no other {} can use them.",
+                    subject(),
+                    object(),
+                    self.subjects
+                        .first()
+                        .map_or("unit", |unit| unit.family.singular())
                 ),
                 _ => format!(
                     "{} rules out cells in {}.",
-                    capitalise(&subject.label(names)),
-                    object.label(names)
+                    capitalise(&subject()),
+                    object()
                 ),
             },
-            (Action::Eliminate(_), Some(subject), None) => match self.rule {
+            (Action::Eliminate(_), Some(_), None) => match self.rule {
                 RuleId::CommonElimination => format!(
                     "Wherever the queen of {} goes, these cells are ruled out.",
-                    subject.label(names)
+                    subject()
                 ),
-                _ => format!(
-                    "{} rules these cells out.",
-                    capitalise(&subject.label(names))
-                ),
+                _ => format!("{} rules these cells out.", capitalise(&subject())),
             },
             _ => self.rule.name().to_string(),
         }
+    }
+}
+
+/// Names a group of units the way the sentence needs them: "row 3", "rows 2, 5
+/// and 7", "the coral and teal regions".
+///
+/// Every group a rule produces is of one family, which is what lets the family
+/// word be lifted out to the front or the back.
+fn label_units(units: &[Unit], names: RegionNames<'_>) -> String {
+    match units {
+        [] => String::new(),
+        [only] => only.label(names),
+        [first, rest @ ..] => {
+            debug_assert!(
+                rest.iter().all(|unit| unit.family == first.family),
+                "a group of units mixes families"
+            );
+            let indices: Vec<u8> = units.iter().map(|unit| unit.index).collect();
+            match first.family {
+                Family::Regions => names.group(&indices),
+                family => {
+                    let numbers: Vec<String> =
+                        indices.iter().map(|i| (i + 1).to_string()).collect();
+                    format!("{} {}", family.plural(), join_with_and(&numbers))
+                }
+            }
+        }
+    }
+}
+
+/// "a, b and c" — an Oxford comma would read as a fourth item to some players.
+fn join_with_and(parts: &[String]) -> String {
+    match parts {
+        [] => String::new(),
+        [only] => only.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -447,8 +524,8 @@ fn rule_single(grid: &Grid) -> Option<Step> {
             return Some(Step {
                 rule: RuleId::Single,
                 action: Action::Place(cell),
-                subject: Some(unit),
-                object: None,
+                subjects: vec![unit],
+                objects: Vec::new(),
             });
         }
     }
@@ -490,8 +567,8 @@ fn rule_confinement(grid: &Grid, rule: RuleId) -> Option<Step> {
                 return Some(Step {
                     rule,
                     action: Action::Eliminate(set_cells(&removed).collect()),
-                    subject: Some(subject),
-                    object: Some(object),
+                    subjects: vec![subject],
+                    objects: vec![object],
                 });
             }
         }
@@ -523,8 +600,8 @@ fn rule_common_elimination(grid: &Grid) -> Option<Step> {
             return Some(Step {
                 rule: RuleId::CommonElimination,
                 action: Action::Eliminate(set_cells(&removed).collect()),
-                subject: Some(unit),
-                object: None,
+                subjects: vec![unit],
+                objects: Vec::new(),
             });
         }
     }
@@ -533,7 +610,7 @@ fn rule_common_elimination(grid: &Grid) -> Option<Step> {
 
 /// Largest locked set considered. Beyond four the reasoning stops being
 /// something a player would plausibly spot.
-const MAX_SET_SIZE: u32 = 4;
+pub const MAX_SET_SIZE: u32 = 4;
 
 /// If `k` units of one family can only reach `k` units of another family, those
 /// `k` counterpart units are consumed and no other unit may use them.
@@ -590,15 +667,21 @@ fn rule_set_elimination(grid: &Grid) -> Option<Step> {
                     }
                 }
                 if set_len(&removed) > 0 {
-                    let first = combo.trailing_zeros() as usize;
                     return Some(Step {
                         rule: RuleId::SetElimination,
                         action: Action::Eliminate(set_cells(&removed).collect()),
-                        subject: Some(subjects[first]),
-                        object: Some(Unit {
-                            family: object_family,
-                            index: union.trailing_zeros() as u8,
-                        }),
+                        // Both sides of the set in full: which `k` units lock
+                        // which `k` counterparts is the whole observation, and
+                        // one member of each would not let the player check it.
+                        subjects: bits(combo as u16)
+                            .map(|i| subjects[usize::from(i)])
+                            .collect(),
+                        objects: bits(union)
+                            .map(|index| Unit {
+                                family: object_family,
+                                index,
+                            })
+                            .collect(),
                     });
                 }
             }
@@ -633,8 +716,8 @@ fn rule_contradiction(grid: &Grid) -> Option<Step> {
                 return Some(Step {
                     rule: RuleId::Contradiction,
                     action: Action::Eliminate(vec![cell]),
-                    subject: Some(unit),
-                    object: None,
+                    subjects: vec![unit],
+                    objects: Vec::new(),
                 });
             }
         }
@@ -996,9 +1079,9 @@ mod tests {
             let Action::Eliminate(cells) = &step.action else {
                 panic!("this rule only eliminates");
             };
-            let subject = step
-                .subject
-                .expect("common elimination reasons from a unit");
+            let &[subject] = step.subjects.as_slice() else {
+                panic!("common elimination reasons from exactly one unit");
+            };
             let candidates = grid.candidates_of(subject);
             for &dead in cells {
                 for candidate in set_cells(&candidates) {
@@ -1078,6 +1161,73 @@ mod tests {
         // Rows and columns are countable off the edge of the board either way.
         assert_eq!(Unit::row(2).label(names), "row 3");
         assert_eq!(Unit::column(7).label(names), "column 8");
+    }
+
+    #[test]
+    fn several_units_of_a_kind_are_listed_under_one_word() {
+        let names = RegionNames::colours(&["coral", "amber", "lime", "teal"]);
+        let rows = [Unit::row(1), Unit::row(4), Unit::row(6)];
+        assert_eq!(label_units(&rows, names), "rows 2, 5 and 7");
+        assert_eq!(label_units(&rows[..2], names), "rows 2 and 5");
+        assert_eq!(label_units(&rows[..1], names), "row 2");
+        assert_eq!(label_units(&[], names), "");
+
+        let regions = [Unit::region(0), Unit::region(3)];
+        assert_eq!(label_units(&regions, names), "the coral and teal regions");
+        // With no colours to draw on, a group falls back to numbers whole
+        // rather than mixing the two.
+        assert_eq!(
+            label_units(&regions, RegionNames::numbered()),
+            "regions 1 and 4"
+        );
+    }
+
+    /// The whole difficulty of a locked set is spotting which units make it up,
+    /// so the sentence has to name every one of them on both sides.
+    #[test]
+    fn a_locked_set_hint_names_every_unit_in_the_set() {
+        let step = Step {
+            rule: RuleId::SetElimination,
+            action: Action::Eliminate(vec![Coord::new(0, 0)]),
+            subjects: vec![Unit::row(1), Unit::row(4), Unit::row(6)],
+            objects: vec![Unit::column(0), Unit::column(3), Unit::column(7)],
+        };
+        assert_eq!(
+            step.explain(RegionNames::numbered()),
+            "Between them, rows 2, 5 and 7 can only reach columns 1, 4 and 8, \
+             so those are spoken for and no other row can use them."
+        );
+        // The jargon it replaced named neither side.
+        assert!(!step.explain(RegionNames::numbered()).contains("locked set"));
+    }
+
+    /// Every locked set the solver actually finds must be reported whole: `k`
+    /// units on one side reaching exactly `k` on the other.
+    #[test]
+    fn a_found_locked_set_carries_both_sides_in_full() {
+        use crate::generator::generate;
+        use crate::seed::PuzzleSeed;
+
+        let mut found = 0;
+        for seed in 0..40u64 {
+            let puzzle = generate(PuzzleSeed::new(8, Difficulty::Hard, seed));
+            let mut grid = Grid::new(puzzle.size(), puzzle.regions());
+            while !grid.contradiction && !grid.is_solved() {
+                let Some(step) = next_step(&grid, true) else {
+                    break;
+                };
+                if step.rule == RuleId::SetElimination {
+                    found += 1;
+                    assert!(step.subjects.len() >= 2, "{step:?}");
+                    assert_eq!(step.subjects.len(), step.objects.len(), "{step:?}");
+                    let family = step.subjects[0].family;
+                    assert!(step.subjects.iter().all(|u| u.family == family));
+                    assert!(step.objects.iter().all(|u| u.family != family));
+                }
+                grid.apply(&step.action);
+            }
+        }
+        assert!(found > 0, "no locked set fired, so nothing was checked");
     }
 
     /// The confinement sentence has to describe the deduction that was actually

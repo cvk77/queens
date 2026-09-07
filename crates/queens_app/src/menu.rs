@@ -340,11 +340,11 @@ fn selected_tint(selected: bool) -> Color {
 // --- statistics ------------------------------------------------------------
 
 fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
-    let rows: Vec<(String, String, String, String)> = ALL_DIFFICULTIES
+    let rows: Vec<[String; 5]> = ALL_DIFFICULTIES
         .into_iter()
         .map(|difficulty| {
             let stats = save.stats_for(difficulty);
-            (
+            [
                 difficulty.name().to_string(),
                 format!("{} / {}", stats.solved, stats.started),
                 stats
@@ -355,7 +355,8 @@ fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
                     .average_seconds()
                     .map(theme::format_time)
                     .unwrap_or_else(|| "-".to_string()),
-            )
+                hints_cell(stats),
+            ]
         })
         .collect();
 
@@ -366,16 +367,22 @@ fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
 
             screen.spawn(theme::panel()).with_children(|panel| {
                 panel.spawn(stats_row(
-                    "Difficulty",
-                    "Solved",
-                    "Best",
-                    "Average",
+                    ["Difficulty", "Solved", "Best", "Average", "Hints"],
                     theme::TEXT_DIM,
                 ));
-                for (name, solved, best, average) in rows {
-                    panel.spawn(stats_row(&name, &solved, &best, &average, theme::TEXT));
+                for row in &rows {
+                    panel.spawn(stats_row(
+                        std::array::from_fn(|i| row[i].as_str()),
+                        theme::TEXT,
+                    ));
                 }
             });
+
+            // Which puzzles the hint count covers, which a column heading has
+            // no room to say.
+            screen.spawn(theme::subtitle(
+                "Hints counts those spent on the puzzles you went on to solve.",
+            ));
 
             screen
                 .spawn(theme::menu_button("Back"))
@@ -383,15 +390,18 @@ fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
         });
 }
 
+/// The hints column. A dash rather than a zero where nothing has been solved,
+/// matching the time columns: no solves is not the same as a clean sheet.
+fn hints_cell(stats: &crate::persistence::DifficultyStats) -> String {
+    if stats.solved == 0 {
+        return "-".to_string();
+    }
+    stats.hints_used.to_string()
+}
+
 /// One line of the statistics table, with fixed column widths so the numbers
 /// line up.
-fn stats_row(
-    difficulty: &str,
-    solved: &str,
-    best: &str,
-    average: &str,
-    color: Color,
-) -> impl Bundle {
+fn stats_row(cells: [&str; 5], color: Color) -> impl Bundle {
     /// A fixed box holding the text, rather than sizing the text node itself:
     /// glyph metrics differ between "0 / 0" and "Easy", and letting those drive
     /// the box leaves the columns sitting at different heights.
@@ -410,6 +420,9 @@ fn stats_row(
         )
     }
 
+    /// Wide enough for the longest cell each column can hold.
+    const WIDTHS: [f32; 5] = [110.0, 90.0, 90.0, 90.0, 90.0];
+
     (
         Node {
             flex_direction: FlexDirection::Row,
@@ -417,12 +430,14 @@ fn stats_row(
             column_gap: Val::Px(10.0),
             ..default()
         },
-        children![
-            column(difficulty, 110.0, color),
-            column(solved, 90.0, color),
-            column(best, 90.0, color),
-            column(average, 90.0, color),
-        ],
+        Children::spawn(SpawnIter(
+            cells
+                .into_iter()
+                .zip(WIDTHS)
+                .map(move |(content, width)| column(content, width, color))
+                .collect::<Vec<_>>()
+                .into_iter(),
+        )),
     )
 }
 

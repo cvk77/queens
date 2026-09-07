@@ -2,7 +2,7 @@
 //! them.
 
 use bevy::prelude::*;
-use queens_core::{BoardState, Coord, Hint, Mark, Puzzle, RegionNames, logic, rules};
+use queens_core::{BoardState, Coord, Hint, HintKind, Mark, Puzzle, RegionNames, logic, rules};
 
 /// How many board snapshots the undo stack keeps. A snapshot is one byte per
 /// cell (144 at most), so this is generous and still trivial.
@@ -25,6 +25,10 @@ pub struct Session {
     /// The last hint and the cells it points at, cleared as soon as it is
     /// acted on.
     pub hint: Option<Hint>,
+    /// How many times this puzzle has told the player something they had not
+    /// been told yet. Survives a resume, so the figure covers the puzzle rather
+    /// than the sitting.
+    pub hints_used: u32,
     /// Which crosses the auto-cross assist put down, rather than the player.
     /// One flag per cell, row-major.
     auto_crossed: Vec<bool>,
@@ -44,7 +48,7 @@ impl Session {
     pub fn new(puzzle: Puzzle, restore: Option<Restore>) -> Self {
         let size = puzzle.size();
         let cells = usize::from(size) * usize::from(size);
-        let (board, elapsed, auto_crossed) = match restore {
+        let (board, elapsed, auto_crossed, hints_used) = match restore {
             // A save from a different build may not match the board any more;
             // an empty board is a better outcome than a crash.
             Some(restore) => {
@@ -55,9 +59,9 @@ impl Session {
                 // safe way to be wrong.
                 let mut flags = restore.auto_crossed;
                 flags.resize(cells, false);
-                (board, restore.elapsed, flags)
+                (board, restore.elapsed, flags, restore.hints_used)
             }
-            None => (BoardState::new(size), 0.0, vec![false; cells]),
+            None => (BoardState::new(size), 0.0, vec![false; cells], 0),
         };
 
         let mut session = Self {
@@ -66,6 +70,7 @@ impl Session {
             elapsed,
             conflicts: Vec::new(),
             hint: None,
+            hints_used,
             auto_crossed,
             past: Vec::new(),
             future: Vec::new(),
@@ -158,8 +163,19 @@ impl Session {
     /// `names` comes from the palette the board is drawn with, so the
     /// explanation can point at a colour rather than a region index that
     /// appears nowhere on screen.
+    ///
+    /// Counts towards [`Session::hints_used`] only when it tells the player
+    /// something new. Asking again without touching the board re-displays the
+    /// hint already on screen, and a solved board has nothing left to give, so
+    /// neither should count against a player who leant on the button once.
     pub fn request_hint(&mut self, names: RegionNames<'_>) {
-        self.hint = Some(logic::next_hint(&self.puzzle, &self.board, names));
+        let repeated = self.hint.is_some();
+        let hint = logic::next_hint(&self.puzzle, &self.board, names);
+        let told_something = !matches!(hint.kind, HintKind::Complete | HintKind::Stuck);
+        if !repeated && told_something {
+            self.hints_used += 1;
+        }
+        self.hint = Some(hint);
     }
 
     /// Removes the assist's crosses that no remaining queen justifies.
@@ -235,6 +251,9 @@ pub struct Restore {
     /// Which of those crosses the assist placed. May be empty, from a save
     /// written before provenance was tracked.
     pub auto_crossed: Vec<bool>,
+    /// Hints already spent on this puzzle. Zero from a save written before
+    /// they were counted, which understates rather than invents.
+    pub hints_used: u32,
 }
 
 /// The puzzle the [`Generating`](crate::states::AppState::Generating) screen
@@ -263,6 +282,7 @@ impl PuzzleRequest {
                 marks: saved.marks.clone(),
                 elapsed: saved.elapsed,
                 auto_crossed: saved.auto_crossed.clone(),
+                hints_used: saved.hints_used,
             }),
         }
     }
@@ -275,6 +295,59 @@ mod tests {
 
     fn session() -> Session {
         Session::new(generate(PuzzleSeed::new(8, Difficulty::Medium, 777)), None)
+    }
+
+    #[test]
+    fn each_new_hint_is_counted_once() {
+        let names = RegionNames::numbered();
+        let mut session = session();
+        assert_eq!(session.hints_used, 0);
+
+        session.request_hint(names);
+        assert_eq!(session.hints_used, 1);
+
+        // Leaning on the button re-shows the hint already up. Charging for the
+        // same advice twice would make the figure a measure of impatience.
+        session.request_hint(names);
+        session.request_hint(names);
+        assert_eq!(session.hints_used, 1);
+
+        // Acting on the board clears the hint, so the next ask is a new one.
+        let queen = session.puzzle.solution_cells().next().unwrap();
+        session.set_mark(queen, Mark::Queen, false);
+        assert!(session.hint.is_none(), "a move should clear the hint");
+        session.request_hint(names);
+        assert_eq!(session.hints_used, 2);
+    }
+
+    /// Telling the player their board is already finished is not advice, and a
+    /// player who taps the button on the victory screen has not used a hint.
+    #[test]
+    fn a_hint_on_a_solved_board_is_not_counted() {
+        let mut session = session();
+        for cell in session.puzzle.solution_cells().collect::<Vec<_>>() {
+            session.set_mark(cell, Mark::Queen, false);
+        }
+        assert!(session.is_solved());
+
+        session.request_hint(RegionNames::numbered());
+        assert_eq!(session.hints_used, 0);
+    }
+
+    #[test]
+    fn a_resumed_game_carries_its_hints_across() {
+        let puzzle = generate(PuzzleSeed::new(8, Difficulty::Medium, 777));
+        let restore = Restore {
+            marks: vec![Mark::Empty; 8 * 8],
+            elapsed: 30.0,
+            auto_crossed: Vec::new(),
+            hints_used: 3,
+        };
+        let mut session = Session::new(puzzle, Some(restore));
+        assert_eq!(session.hints_used, 3);
+
+        session.request_hint(RegionNames::numbered());
+        assert_eq!(session.hints_used, 4, "counting resumes, not restarts");
     }
 
     /// Placing a queen with the assist on marks a swathe of cells; taking that

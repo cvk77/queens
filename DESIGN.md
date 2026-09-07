@@ -33,7 +33,7 @@ candidate set and applies named rules cheapest-first:
 | `LineConfinement` | A unit's candidates all lie in one row or column |
 | `RegionConfinement` | A unit's candidates all lie in one region |
 | `CommonElimination` | A cell ruled out by *every* candidate of some unit |
-| `SetElimination` | `k` units confined to `k` counterpart units |
+| `SetElimination` | `k` units confined to `k` counterpart units, which those `k` then own outright |
 | `Contradiction` | Assume a candidate, propagate, eliminate on contradiction |
 
 A puzzle's difficulty is the band of the hardest rule the solve required. The
@@ -47,7 +47,23 @@ nothing on screen numbers one, so `queens_core` takes the names from the caller
 ([`RegionNames`]) rather than inventing an index: the game passes the colour
 names of whichever palette it is drawing with, colourblind or not.
 
+**A hint never names its rule.** `Step::explain` writes out what was seen and
+what follows, because the rule names are labels for people who already know the
+moves: "a locked set starting at row 3" tells a player who has not met one
+neither what a locked set is nor which units make up this one. Naming both
+sides in full — *between them, rows 2, 5 and 7 can only reach columns 1, 4 and
+8* — is the explanation, and it is also checkable against the board in front of
+them. That is why `Step` carries `subjects` and `objects` as vectors: a
+one-unit-a-side `Step` could not say what the set was.
+
+The rule names never reach the player. Nothing on the play screen labels a
+move, and the message line under the board holds a hint or nothing at all: a
+board that announces which step it will need hands the player the shape of the
+solve before they have looked at it. `RuleId::name` and
+[`RuleId::description`] are for the CLI audit and for this document.
+
 [`RegionNames`]: crates/queens_core/src/logic.rs
+[`RuleId::description`]: crates/queens_core/src/rating.rs
 
 **The bands were calibrated against data, not intuition.** The first cut put
 `CommonElimination` in Hard, which sounded right and was not: measuring which

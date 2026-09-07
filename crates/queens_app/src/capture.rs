@@ -278,6 +278,8 @@ const SCRIPT: &[Beat] = &[
                 marks,
                 elapsed: 92.0,
                 auto_crossed: Vec::new(),
+                // Non-zero, so the resume has something to carry across.
+                hints_used: 2,
             });
             ctx.next_app.set(AppState::MainMenu);
         },
@@ -299,6 +301,18 @@ const SCRIPT: &[Beat] = &[
     Beat {
         seconds: 16.0,
         action: |commands, ctx| ctx.shoot(commands, "11-resumed"),
+    },
+    // Hints spent on a puzzle belong to the puzzle, not the sitting: putting it
+    // down and picking it up again must not hand the player a clean sheet.
+    Beat {
+        seconds: 16.2,
+        action: |_commands, ctx| {
+            let carried = ctx.session.as_deref().map(|session| session.hints_used);
+            ctx.check(
+                format!("a resumed game keeps the hints it has spent ({carried:?})"),
+                carried == Some(2),
+            );
+        },
     },
     // A double-click with a pixel of movement inside each press, which Bevy
     // reports as a drag. Both clicks have to land for the cell to reach a

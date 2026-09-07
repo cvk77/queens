@@ -58,6 +58,12 @@ pub struct DifficultyStats {
     pub best_seconds: Option<f32>,
     /// Time spent on solved puzzles, for an average.
     pub total_seconds: f32,
+    /// Hints spent on solved puzzles. Counted alongside `solved` rather than
+    /// `started` so it stays comparable with the times: both describe the
+    /// puzzles that were actually finished. Defaulted rather than versioned,
+    /// so a save written before this existed still loads.
+    #[serde(default)]
+    pub hints_used: u32,
 }
 
 impl DifficultyStats {
@@ -76,6 +82,10 @@ pub struct InProgress {
     /// than versioned, so a save written before this existed still loads.
     #[serde(default)]
     pub auto_crossed: Vec<bool>,
+    /// Hints spent so far, so putting a puzzle down and picking it up again
+    /// does not wipe the slate.
+    #[serde(default)]
+    pub hints_used: u32,
 }
 
 /// Everything that outlives a session.
@@ -114,11 +124,12 @@ impl SaveData {
         self.stats_for_mut(difficulty).started += 1;
     }
 
-    /// Records a solve and updates the best time.
-    pub fn record_solved(&mut self, difficulty: Difficulty, seconds: f32) {
+    /// Records a solve, the hints it took, and the best time.
+    pub fn record_solved(&mut self, difficulty: Difficulty, seconds: f32, hints: u32) {
         let stats = self.stats_for_mut(difficulty);
         stats.solved += 1;
         stats.total_seconds += seconds;
+        stats.hints_used += hints;
         stats.best_seconds = Some(match stats.best_seconds {
             Some(best) => best.min(seconds),
             None => seconds,
@@ -222,4 +233,56 @@ fn write_when_changed(
 /// leaving a game.
 pub fn flush(save: &SaveData) {
     save.save();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn solves_accumulate_the_hints_they_took() {
+        let mut save = SaveData::default();
+        save.record_solved(Difficulty::Hard, 100.0, 3);
+        save.record_solved(Difficulty::Hard, 80.0, 0);
+        save.record_solved(Difficulty::Hard, 90.0, 1);
+        // A different band keeps its own tally.
+        save.record_solved(Difficulty::Easy, 20.0, 5);
+
+        let hard = save.stats_for(Difficulty::Hard);
+        assert_eq!(hard.solved, 3);
+        assert_eq!(hard.hints_used, 4);
+        assert_eq!(hard.best_seconds, Some(80.0));
+
+        let easy = save.stats_for(Difficulty::Easy);
+        assert_eq!(easy.hints_used, 5);
+    }
+
+    /// New fields are defaulted rather than versioned, so a save written before
+    /// hints were counted still loads and keeps the statistics it does have.
+    #[test]
+    fn a_save_predating_the_hint_counters_still_loads() {
+        // Copied from a file this build's predecessor wrote: the fixed-size
+        // stats array is a RON tuple, not a list.
+        let older = r#"(
+            version: 2,
+            settings: (size: 8, difficulty: Medium, auto_cross: true, colourblind: false),
+            stats: (
+                (started: 4, solved: 2, best_seconds: Some(61.5), total_seconds: 200.0),
+                (started: 0, solved: 0, best_seconds: None, total_seconds: 0.0),
+                (started: 0, solved: 0, best_seconds: None, total_seconds: 0.0),
+                (started: 0, solved: 0, best_seconds: None, total_seconds: 0.0),
+            ),
+            in_progress: Some((
+                seed: (size: 8, difficulty: Medium, seed: 74763209),
+                marks: [],
+                elapsed: 12.0,
+            )),
+        )"#;
+
+        let save: SaveData = ron::from_str(older).expect("an older save should still parse");
+        let easy = save.stats_for(Difficulty::Easy);
+        assert_eq!(easy.solved, 2);
+        assert_eq!(easy.hints_used, 0);
+        assert_eq!(save.in_progress.expect("resume slot").hints_used, 0);
+    }
 }

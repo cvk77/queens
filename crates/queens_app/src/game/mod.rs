@@ -70,7 +70,7 @@ fn spawn_screen(mut commands: Commands, session: Res<Session>, save: Res<SaveDat
                     ..default()
                 })
                 .with_children(|middle| board::spawn_grid(middle, &session, &save));
-            hud::spawn_bottom_bar(screen, &session);
+            hud::spawn_bottom_bar(screen);
         });
 }
 
@@ -116,11 +116,16 @@ fn snapshot(session: &Session) -> InProgress {
         marks: session.board.marks().to_vec(),
         elapsed: session.elapsed,
         auto_crossed: session.auto_crossed().to_vec(),
+        hints_used: session.hints_used,
     }
 }
 
 fn record_win(session: Res<Session>, mut save: ResMut<SaveData>) {
-    save.record_solved(session.puzzle.rating().difficulty, session.elapsed);
+    save.record_solved(
+        session.puzzle.rating().difficulty,
+        session.elapsed,
+        session.hints_used,
+    );
     save.in_progress = None;
 }
 
@@ -188,6 +193,11 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
                         "{size}x{size} {rating}   best {}",
                         best.map(theme::format_time).unwrap_or_default()
                     )
+                }));
+                panel.spawn(theme::subtitle(match session.hints_used {
+                    0 => "Solved without a hint.".to_string(),
+                    1 => "1 hint used.".to_string(),
+                    n => format!("{n} hints used."),
                 }));
                 panel.spawn(theme::subtitle(format!(
                     "Seed {}",

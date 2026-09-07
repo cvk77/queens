@@ -51,8 +51,23 @@ instead, because nothing sound can be deduced past a false premise.
 A hint names what it is talking about the way the board shows it: rows and
 columns by the numbers running alongside the grid, a region by its colour. Every
 cell the step applies to is outlined, not just the first. The line it is written
-on keeps its height whether it holds a hint or the puzzle's rating, so nothing
-moves under you when you ask.
+on keeps its height whether or not it holds a hint, so nothing moves under you
+when you ask.
+
+Every hint spells out what it saw and what follows from it, so none of them
+require knowing the name of the move. The names below are only for talking
+about them; the game never shows you one, and never tells you in advance which
+moves your puzzle will ask for.
+
+| The move | What you are looking for | How a hint puts it |
+|---|---|---|
+| **Propagation** | A queen rules out the rest of its row, its column, its region, and every cell it touches. | *The queen at r3c5 already rules out r4c6.* |
+| **Last cell** | A row, column or region with one cell left has to put its queen there. | *Row 3 has only one cell left for its queen: r3c5.* |
+| **Confined to a line** | All a region has left sits in one row or column, so that line's queen is one of those cells and the rest of the line is clear. | *Every remaining cell of the teal region lies in column 8, so the queen of column 8 must be one of them and the rest of column 8 can be crossed off.* |
+| **Confined to a region** | The same the other way round: all a row or column has left sits in one region. | *Every remaining cell of row 4 lies in the sand region, so the queen of the sand region must be one of them and the rest of the sand region can be crossed off.* |
+| **Shared elimination** | A cell that dies wherever some region's queen goes is dead outright — you do not need to know which cell that queen takes. | *Wherever the queen of the coral region goes, these cells are ruled out.* |
+| **Locked set** | Two or three rows with only the same two or three columns left between them. Those columns are theirs: one each, in some order, and no other row gets a look in. The same holds for any two families — rows and regions, columns and regions. | *Between them, rows 2, 5 and 7 can only reach columns 1, 4 and 8, so those are spoken for and no other row can use them.* |
+| **Contradiction** | Nothing above works. Try a cell, follow it through, and cross it off if it leads to an impossible board. | Only ever needed on Expert. |
 
 **Pausing** hides every queen and cross. The clock stops, so the board stops
 being readable too.
@@ -67,7 +82,7 @@ obvious to the most demanding, and the band is set by the hardest rule it needed
 |---|---|
 | **Easy** | A row, column or region with only one cell left |
 | **Medium** | Confinement, and cells ruled out by every option a region has |
-| **Hard** | A locked set: `k` units that can only reach `k` counterparts |
+| **Hard** | A locked set: two or three rows sharing exactly that many columns |
 | **Expert** | Proof by contradiction |
 
 Board size and difficulty are chosen independently, so an Easy 11×11 and an
@@ -90,6 +105,14 @@ Settings, per-difficulty statistics and one in-progress game live in
 `save.ron` under your platform's data directory (`%APPDATA%\queens` on Windows,
 `~/.local/share/queens` on Linux, `~/Library/Application Support/queens` on
 macOS). A corrupt or outdated file is discarded rather than fatal.
+
+**Statistics** are per difficulty: puzzles solved out of started, your best and
+average solve times, and the hints you spent. Hints are counted per puzzle
+rather than per press — asking again without touching the board just re-reads
+the hint already on screen — and they follow a puzzle across a save and resume.
+Only the puzzles you went on to solve are counted, which is what keeps the
+figure comparable with the times beside it. The victory panel shows the tally
+for the puzzle you just finished.
 
 - **Auto-cross** crosses off every cell a queen rules out the moment you place
   it. Lift that queen again and its crosses go with it; the ones you made

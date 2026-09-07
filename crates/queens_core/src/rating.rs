@@ -76,6 +76,43 @@ impl RuleId {
             RuleId::Contradiction => "Contradiction",
         }
     }
+
+    /// What the rule asks the player to notice, in one sentence.
+    ///
+    /// [`RuleId::name`] is a label to recognise a move by once you know it, and
+    /// no help at all before then: "Locked set" tells a player nothing about
+    /// what to look for. This is the sentence that would.
+    ///
+    /// Neither reaches the player during a game — the board never names a move,
+    /// and never says in advance which ones a puzzle will need — so this is for
+    /// tooling and documentation that talks *about* the rules. Deliberately in
+    /// the board's vocabulary (rows, columns, regions, queens) and free of the
+    /// solver's own terms, and ASCII only, so it can be shown as it stands.
+    pub const fn description(self) -> &'static str {
+        match self {
+            RuleId::Propagate => {
+                "A queen rules out the rest of its row, its column, its region, and every cell it touches."
+            }
+            RuleId::Single => {
+                "A row, column or region with one cell left has to put its queen there."
+            }
+            RuleId::LineConfinement => {
+                "When all a region has left sits in one row or column, that line's queen is one of those cells."
+            }
+            RuleId::RegionConfinement => {
+                "When all a row or column has left sits in one region, that region's queen is one of those cells."
+            }
+            RuleId::CommonElimination => {
+                "A cell that dies wherever some region's queen goes is dead outright."
+            }
+            RuleId::SetElimination => {
+                "When two or three rows have only the same two or three columns left, those columns are theirs alone."
+            }
+            RuleId::Contradiction => {
+                "Try a cell, follow it through, and cross it off if it leads to an impossible board."
+            }
+        }
+    }
 }
 
 /// How hard a puzzle is, defined by the deductions it requires rather than by

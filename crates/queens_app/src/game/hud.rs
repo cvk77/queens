@@ -16,7 +16,7 @@ pub(super) struct TimerLabel;
 #[derive(Component)]
 pub(super) struct QueensLabel;
 
-/// Shows the most recent hint, or the puzzle's rating when there is none.
+/// Shows the most recent hint, and nothing when there is none.
 #[derive(Component)]
 pub(super) struct MessageLabel;
 
@@ -27,7 +27,9 @@ const MESSAGE_FONT_PX: f32 = 16.0;
 const MESSAGE_LINE_PX: f32 = 20.0;
 /// How many lines the commentary always occupies. The longest explanation the
 /// solver produces fits in three at any window width the game is playable at;
-/// a narrower one wraps further and the text is centred over the overflow.
+/// a narrower one wraps further and the text is centred over the overflow. The
+/// slot holds that height while empty, so the board does not shift when a hint
+/// appears.
 const MESSAGE_LINES: f32 = 3.0;
 
 /// Greyed out when there is nothing to undo or redo.
@@ -87,9 +89,7 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
 }
 
 /// The toolbar below the board, plus the running commentary.
-pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
-    let hardest = session.puzzle.rating().hardest_rule;
-
+pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands) {
     parent
         .spawn((Node {
             flex_direction: FlexDirection::Column,
@@ -99,9 +99,9 @@ pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
             ..default()
         },))
         .with_children(|column| {
-            // The commentary swings between one line and three as hints come
-            // and go. Its slot is a fixed height so the toolbar underneath and
-            // the board above stay put: a board that jumps every time the
+            // The commentary swings between nothing and three lines as hints
+            // come and go. Its slot is a fixed height so the toolbar below it
+            // and the board above stay put: a board that jumps every time the
             // player asks for a hint is a board they lose their place on.
             column
                 .spawn(Node {
@@ -115,7 +115,7 @@ pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
                 })
                 .with_children(|slot| {
                     slot.spawn((
-                        Text::new(format!("Hardest step needed: {}", hardest.name())),
+                        Text::default(),
                         // Spelled out rather than built from `theme::text` so
                         // the line height is pinned: the slot above reserves a
                         // whole number of these.
@@ -227,13 +227,7 @@ pub fn refresh_hud(
                 None if !session.conflicts.is_empty() => {
                     ("Some queens are in conflict.".to_string(), theme::DANGER)
                 }
-                None => (
-                    format!(
-                        "Hardest step needed: {}",
-                        session.puzzle.rating().hardest_rule.name()
-                    ),
-                    theme::TEXT_DIM,
-                ),
+                None => (String::new(), theme::TEXT_DIM),
             };
             label.0 = text;
             color.0 = tint;
@@ -247,6 +241,64 @@ pub fn refresh_hud(
             let base = if enabled { theme::BUTTON } else { theme::PANEL };
             if tint.base != base {
                 tint.base = base;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use queens_core::rating::ALL_RULES;
+
+    /// Widest the message line is at the reference window: 74% of 1024px at
+    /// roughly 9.6px per glyph in the built-in font.
+    const CHARS_PER_LINE: usize = 78;
+
+    /// The slot is a fixed height, so the wordiest sentence the solver can
+    /// produce has to fit it rather than be cut off. Built by hand from the
+    /// worst case — a full-size board, the longest colour names, and the
+    /// largest set the solver will consider — rather than hunting for it in
+    /// generated puzzles, which would only prove that today's seeds are tame.
+    #[test]
+    fn the_wordiest_hint_fits_the_slot() {
+        use queens_core::logic::{Action, Step, Unit};
+        use queens_core::{Coord, MAX_SIZE, RuleId};
+
+        let names = theme::region_names(false);
+        let longest = |family: fn(u8) -> Unit, count: usize| -> Vec<Unit> {
+            let mut units: Vec<Unit> = (0..MAX_SIZE).map(family).collect();
+            // The last indices carry the longest names and the two-digit
+            // numbers, which is the worst case for either family.
+            units.split_off(usize::from(MAX_SIZE) - count)
+        };
+
+        for rule in ALL_RULES {
+            // Only a locked set reasons about more than one unit a side.
+            let group = match rule {
+                RuleId::SetElimination => queens_core::logic::MAX_SET_SIZE as usize,
+                _ => 1,
+            };
+            for (subjects, objects) in [
+                (longest(Unit::region, group), longest(Unit::column, group)),
+                (longest(Unit::column, group), longest(Unit::region, group)),
+                (longest(Unit::region, group), longest(Unit::row, group)),
+                (longest(Unit::row, group), longest(Unit::region, group)),
+            ] {
+                let step = Step {
+                    rule,
+                    action: Action::Eliminate(vec![Coord::new(0, 0)]),
+                    subjects,
+                    objects,
+                };
+                let message = step.explain(names);
+                let lines = message.len().div_ceil(CHARS_PER_LINE);
+                assert!(
+                    lines <= MESSAGE_LINES as usize,
+                    "{rule:?} runs to {lines} lines ({} chars): {message}",
+                    message.len()
+                );
+                assert!(message.is_ascii(), "{message}");
             }
         }
     }

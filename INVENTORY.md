@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 23 source files, ~7,600 lines, three crates. Start with
+A map of the codebase: 23 source files, ~8,100 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -10,7 +10,7 @@ the task index, then the per-file notes.
 | The four rules, conflict detection, win condition | `queens_core/src/rules.rs` |
 | What a difficulty band means | `queens_core/src/rating.rs` (`RuleId::difficulty`) |
 | The smallest allowed region | `queens_core/src/rating.rs` (`Difficulty::min_region_size`) |
-| Deduction rules, hint text | `queens_core/src/logic.rs` |
+| Deduction rules, the sentence a hint is phrased as | `queens_core/src/logic.rs` |
 | Puzzle generation, uniqueness repair | `queens_core/src/generator.rs` |
 | Uniqueness / solution counting | `queens_core/src/solver.rs` |
 | Board sizes, `Coord`, `Mark`, `Puzzle` | `queens_core/src/board.rs` |
@@ -19,7 +19,7 @@ the task index, then the per-file notes.
 | Colours, fonts, buttons, panels | `queens_app/src/theme.rs` |
 | Board drawing, cell borders, the queen crown | `queens_app/src/game/board.rs` |
 | Clicks, drags, keyboard shortcuts | `queens_app/src/game/interaction.rs` |
-| Undo, auto-cross, hint requests | `queens_app/src/session.rs` |
+| Undo, auto-cross, hint requests, the hint tally | `queens_app/src/session.rs` |
 | Top bar, toolbar, timer, hint line | `queens_app/src/game/hud.rs` |
 | Pause / victory overlays, win detection, autosave | `queens_app/src/game/mod.rs` |
 | Menus, size/difficulty pickers, seed entry | `queens_app/src/menu.rs` |
@@ -30,16 +30,16 @@ the task index, then the per-file notes.
 
 ## `queens_core` — the puzzle, with no engine attached
 
-Only depends on `serde`. 57 tests (2 of them `#[ignore]` diagnostics).
+Only depends on `serde`. 60 tests (2 of them `#[ignore]` diagnostics).
 
 | File | Lines | What is in it |
 |---|---|---|
 | `lib.rs` | 50 | Module list, re-exports, a doctest showing the basic flow |
 | `board.rs` | 358 | `Coord` (with `touches`, `neighbours`), `Side`, `Mark`, `Puzzle`, `BoardState`, `MIN_SIZE` = 5, `MAX_SIZE` = 12 |
 | `rules.rs` | 253 | `violations`, `conflicting_cells`, `is_solved`, `rules_out`, `eliminated_by`, `auto_cross` |
-| `rating.rs` | 163 | `RuleId` (7 rules), `Difficulty`, `Rating`, `min_region_size` |
+| `rating.rs` | 200 | `RuleId` (7 rules, each with a `name` and a player-facing `description`), `Difficulty`, `Rating`, `min_region_size` |
 | `solver.rs` | 259 | Exhaustive bitmask search: `count_solutions`, `has_unique_solution`, `solve_first`, `find_alternative` |
-| `logic.rs` | 1296 | The deductive solver: `Grid`, the seven rules, `rate_layout`, `next_hint`, `Hint`/`HintKind`, `RegionNames` |
+| `logic.rs` | 1446 | The deductive solver: `Grid`, the seven rules, `rate_layout`, `next_hint`, `Hint`/`HintKind`, `RegionNames` |
 | `generator.rs` | 983 | `generate`, `generate_with_stats`, region growth, `repair_towards_uniqueness`, `make_room`, `smallest_region`, `regions_are_valid` |
 | `rng.rs` | 179 | Vendored SplitMix64 `Rng`, `entropy_seed`, `MAX_FRESH_SEED` |
 | `seed.rs` | 37 | `PuzzleSeed` — size, requested difficulty, `u64` |
@@ -73,22 +73,22 @@ regeneration from its seed.
 
 ## `queens_app` — the game
 
-18 tests.
+26 tests.
 
 | File | Lines | What is in it |
 |---|---|---|
 | `main.rs` | 52 | `App` setup, plugin registration, the camera, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
 | `theme.rs` | 354 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
-| `session.rs` | 377 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance. Also `PuzzleRequest` and `Restore` |
-| `persistence.rs` | 225 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
+| `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
+| `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 99 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, animates the ellipsis |
-| `menu.rs` | 562 | Main menu, New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
-| `game/mod.rs` | 217 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
+| `menu.rs` | 577 | Main menu, New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
+| `game/mod.rs` | 227 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
 | `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
-| `game/hud.rs` | 253 | Top bar (size, difficulty, seed, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
+| `game/hud.rs` | 305 | Top bar (size, difficulty, seed, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
 | `game/interaction.rs` | 344 | `PaintStroke`, the click/drag observers, keyboard shortcuts |
-| `capture.rs` | 636 | The scripted run: screenshots every screen and asserts real pointer gestures |
+| `capture.rs` | 650 | The scripted run: screenshots every screen and asserts real pointer gestures |
 
 ### How a game starts
 
@@ -118,15 +118,18 @@ automatic.
 
 | Where | Count | Covers |
 |---|---|---|
-| `queens_core/src/logic.rs` | 15 | Rule soundness, rating, every hint path |
+| `queens_core/src/logic.rs` | 20 | Rule soundness, rating, every hint path, how a hint is worded |
 | `queens_core/src/generator.rs` | 14 | Determinism, uniqueness, region structure, repair, size floor, band hit rate |
 | `queens_core/src/rules.rs` | 10 | Each violation kind, the diagonal corner case, auto-cross |
 | `queens_core/src/solver.rs` | 6 | Counting, caps, agreement with brute force |
 | `queens_core/src/board.rs` | 5 | Geometry, adjacency, mark cycle |
 | `queens_core/src/rng.rs` | 5 | Reproducibility, uniformity, shuffle |
 | `queens_app/src/game/interaction.rs` | 7 | The gesture state machine |
-| `queens_app/src/session.rs` | 5 | Queen removal taking its auto-crosses, undo |
+| `queens_app/src/session.rs` | 8 | Queen removal taking its auto-crosses, undo, when a hint counts |
+| `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
 | `queens_app/src/menu.rs` | 4 | Seed field parsing and its digit cap |
+| `queens_app/src/game/hud.rs` | 1 | The wordiest hint fitting the message slot |
+| `queens_app/src/theme.rs` | 2 | Every region colour having a distinct ASCII name |
 
 Two `#[ignore]` diagnostics in `generator.rs` print measurements rather than
 assert:
