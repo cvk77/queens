@@ -200,10 +200,41 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
                     1 => "1 hint used.".to_string(),
                     n => format!("{n} hints used."),
                 }));
-                panel.spawn(theme::subtitle(format!(
-                    "Seed {}",
-                    session.puzzle.seed().seed
-                )));
+                panel.spawn(theme::row(8.0)).with_children(|row| {
+                    // The share code, so a puzzle worth keeping can be played
+                    // again. Clicking it copies the code, same as the one in
+                    // the top bar.
+                    row.spawn((
+                        theme::text(format!("#{}", session.puzzle.seed()), 16.0, theme::TEXT_DIM),
+                        TextLayout::no_wrap(),
+                    ))
+                    .observe(hud::copy_seed)
+                    .observe(
+                        |over: On<Pointer<Over>>, mut labels: Query<&mut TextColor>| {
+                            if let Ok(mut color) = labels.get_mut(over.event_target()) {
+                                color.0 = theme::TEXT;
+                            }
+                        },
+                    )
+                    .observe(
+                        |out: On<Pointer<Out>>, mut labels: Query<&mut TextColor>| {
+                            if let Ok(mut color) = labels.get_mut(out.event_target()) {
+                                color.0 = theme::TEXT_DIM;
+                            }
+                        },
+                    );
+                    // Holds its width while empty, so acknowledging a copy
+                    // cannot nudge the code sideways.
+                    row.spawn((
+                        theme::text("", 15.0, theme::ACCENT),
+                        Node {
+                            min_width: Val::Px(hud::COPIED_WIDTH_PX),
+                            ..default()
+                        },
+                        TextLayout::no_wrap(),
+                        hud::SeedCopied::default(),
+                    ));
+                });
 
                 panel.spawn(theme::accent_button("New Puzzle")).observe(
                     |_click: On<Pointer<Click>>,

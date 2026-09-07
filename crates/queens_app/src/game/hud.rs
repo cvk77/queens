@@ -34,7 +34,7 @@ const COPIED_SECONDS: f32 = 1.5;
 /// shows. Reserved up front rather than claimed on the click, and mirrored on
 /// the other side of the bar, so a copy neither shifts the bar nor pulls it off
 /// centre.
-const COPIED_WIDTH_PX: f32 = 70.0;
+pub(super) const COPIED_WIDTH_PX: f32 = 70.0;
 
 /// The commentary under the board.
 const MESSAGE_FONT_PX: f32 = 16.0;
@@ -139,7 +139,8 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
 ///
 /// The code alone: the leading `#` is decoration, and the share code field on
 /// the New Game screen takes exactly this, size and difficulty included.
-fn copy_seed(
+/// Shared with the victory overlay, which offers the same code to copy.
+pub(super) fn copy_seed(
     _click: On<Pointer<Click>>,
     session: Res<Session>,
     mut clipboard: ResMut<Clipboard>,
