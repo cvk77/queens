@@ -13,6 +13,8 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SeedInput>()
+            .init_resource::<ShareCodeInput>()
+            .init_resource::<FocusedField>()
             .add_systems(OnEnter(AppState::MainMenu), spawn_main_menu)
             .add_systems(OnEnter(AppState::NewGame), spawn_new_game)
             .add_systems(OnEnter(AppState::Stats), spawn_stats)
@@ -24,6 +26,9 @@ impl Plugin for MenuPlugin {
                     highlight_difficulty_options,
                     type_seed,
                     show_seed_input,
+                    type_share_code,
+                    show_share_code_input,
+                    dim_seed_clear_button,
                 )
                     .run_if(in_state(AppState::NewGame)),
             )
@@ -114,6 +119,28 @@ struct SizeOption(u8);
 #[derive(Component, Clone, Copy)]
 struct DifficultyOption(queens_core::Difficulty);
 
+/// Which of the two typed fields on the New Game screen keystrokes go to.
+///
+/// Two fields listen for characters now, where the screen used to have only
+/// one; without this, a digit typed while composing a share code would land
+/// in the seed field too, since nothing else told it not to.
+#[derive(Resource, Clone, Copy, PartialEq, Eq, Default)]
+enum FocusedField {
+    #[default]
+    ShareCode,
+    Seed,
+}
+
+/// Points typed characters at one of the two fields. Mirrors [`go_to`].
+fn focus_on(field: FocusedField) -> impl Fn(On<Pointer<Click>>, ResMut<FocusedField>) {
+    move |_click, mut focus| *focus = field
+}
+
+/// Tags the Seed row's "Clear" button, so it can be dimmed along with the
+/// field it clears while a share code holds.
+#[derive(Component)]
+struct SeedClearButton;
+
 fn spawn_new_game(mut commands: Commands) {
     commands
         .spawn(theme::screen(DespawnOnExit(AppState::NewGame)))
@@ -121,13 +148,38 @@ fn spawn_new_game(mut commands: Commands) {
             screen.spawn(theme::title("New Game"));
 
             screen.spawn(theme::panel()).with_children(|panel| {
+                panel.spawn(theme::text("Share code", 20.0, theme::TEXT));
+                panel.spawn(theme::row(10.0)).with_children(|row| {
+                    row.spawn(share_code_field())
+                        .observe(focus_on(FocusedField::ShareCode));
+                    row.spawn(theme::small_button("Clear")).observe(
+                        |_click: On<Pointer<Click>>, mut share: ResMut<ShareCodeInput>| {
+                            share.text.clear();
+                        },
+                    );
+                });
+                panel.spawn((
+                    theme::subtitle(
+                        "Paste a share code to replay someone else's puzzle exactly - \
+                         it picks the size and difficulty for you.",
+                    ),
+                    Node {
+                        margin: UiRect::bottom(Val::Px(10.0)),
+                        ..default()
+                    },
+                ));
+
                 panel.spawn(theme::text("Board size", 20.0, theme::TEXT));
                 panel.spawn(theme::row(8.0)).with_children(|row| {
                     for size in MIN_SIZE..=MAX_SIZE {
                         row.spawn((theme::small_button(&size.to_string()), SizeOption(size)))
                             .observe(
-                                move |_click: On<Pointer<Click>>, mut save: ResMut<SaveData>| {
-                                    save.settings.size = size;
+                                move |_click: On<Pointer<Click>>,
+                                      mut save: ResMut<SaveData>,
+                                      share: Res<ShareCodeInput>| {
+                                    if share.decoded().is_none() {
+                                        save.settings.size = size;
+                                    }
                                 },
                             );
                     }
@@ -147,8 +199,12 @@ fn spawn_new_game(mut commands: Commands) {
                             DifficultyOption(difficulty),
                         ))
                         .observe(
-                            move |_click: On<Pointer<Click>>, mut save: ResMut<SaveData>| {
-                                save.settings.difficulty = difficulty;
+                            move |_click: On<Pointer<Click>>,
+                                  mut save: ResMut<SaveData>,
+                                  share: Res<ShareCodeInput>| {
+                                if share.decoded().is_none() {
+                                    save.settings.difficulty = difficulty;
+                                }
                             },
                         );
                     }
@@ -173,38 +229,73 @@ fn spawn_new_game(mut commands: Commands) {
                     },
                 ));
                 panel.spawn(theme::row(10.0)).with_children(|row| {
-                    row.spawn(seed_field());
-                    row.spawn(theme::small_button("Clear")).observe(
-                        |_click: On<Pointer<Click>>, mut typed: ResMut<SeedInput>| {
-                            typed.digits.clear();
-                        },
-                    );
+                    row.spawn(seed_field())
+                        .observe(focus_on(FocusedField::Seed));
+                    row.spawn((theme::small_button("Clear"), SeedClearButton))
+                        .observe(
+                            |_click: On<Pointer<Click>>,
+                             mut typed: ResMut<SeedInput>,
+                             share: Res<ShareCodeInput>| {
+                                if share.decoded().is_none() {
+                                    typed.digits.clear();
+                                }
+                            },
+                        );
                 });
                 panel.spawn(theme::subtitle(
-                    "Type a seed to replay an exact puzzle, or leave it blank for a new one.",
+                    "Type a seed to replay an exact puzzle, or leave it blank for a new one. \
+                     Ignored while a share code is set above.",
                 ));
             });
 
             screen.spawn(theme::row(12.0)).with_children(|row| {
                 row.spawn(theme::menu_button("Back"))
                     .observe(go_to(AppState::MainMenu));
-                row.spawn(theme::accent_button("Start")).observe(
-                    |_click: On<Pointer<Click>>,
-                     mut commands: Commands,
-                     save: Res<SaveData>,
-                     typed: Res<SeedInput>,
-                     mut next: ResMut<NextState<AppState>>| {
-                        let (size, difficulty) = (save.settings.size, save.settings.difficulty);
-                        let seed = match typed.seed() {
-                            Some(seed) => PuzzleSeed::new(size, difficulty, seed),
-                            None => PuzzleSeed::random(size, difficulty),
-                        };
-                        commands.insert_resource(PuzzleRequest::fresh(seed));
-                        next.set(AppState::Generating);
-                    },
-                );
+                row.spawn(theme::accent_button("Start"))
+                    .observe(start_puzzle);
             });
         });
+}
+
+/// Starts the puzzle the New Game screen currently describes.
+fn start_puzzle(
+    _click: On<Pointer<Click>>,
+    mut commands: Commands,
+    mut save: ResMut<SaveData>,
+    typed: Res<SeedInput>,
+    share: Res<ShareCodeInput>,
+    mut next: ResMut<NextState<AppState>>,
+) {
+    let seed = resolve_puzzle(&mut save.settings, typed.seed(), share.decoded());
+    commands.insert_resource(PuzzleRequest::fresh(seed));
+    next.set(AppState::Generating);
+}
+
+/// Picks the puzzle the New Game screen's fields describe: a decoded share
+/// code wins outright; otherwise a typed seed combines with `settings`'
+/// size and difficulty, or a fresh seed is picked.
+///
+/// A share code's size and difficulty are written back into `settings` too,
+/// even though its buttons were never clicked: "New Puzzle" on the victory
+/// screen and the toolbar's "New" both continue from `settings`, and should
+/// carry on with the puzzle just played rather than snap back to whatever
+/// was last manually selected.
+fn resolve_puzzle(
+    settings: &mut crate::persistence::Settings,
+    typed_seed: Option<u64>,
+    share_code: Option<PuzzleSeed>,
+) -> PuzzleSeed {
+    match share_code {
+        Some(seed) => {
+            settings.size = seed.size;
+            settings.difficulty = seed.difficulty;
+            seed
+        }
+        None => match typed_seed {
+            Some(seed) => PuzzleSeed::new(settings.size, settings.difficulty, seed),
+            None => PuzzleSeed::random(settings.size, settings.difficulty),
+        },
+    }
 }
 
 // --- typing a seed ---------------------------------------------------------
@@ -213,8 +304,7 @@ fn spawn_new_game(mut commands: Commands) {
 /// me".
 ///
 /// Rolled by hand rather than with a text widget because the field only ever
-/// holds digits, which makes the whole of it a dozen lines and keeps the screen
-/// free of focus rules.
+/// holds digits, which makes the whole of it a dozen lines.
 #[derive(Resource, Default)]
 pub struct SeedInput {
     digits: String,
@@ -238,14 +328,31 @@ impl SeedInput {
     fn backspace(&mut self) {
         self.digits.pop();
     }
+
+    /// Replaces the field with the digits found in `text`, dropping anything
+    /// else a paste might carry along, such as the leading `#` a copied seed
+    /// is shown with.
+    fn set_digits(&mut self, text: &str) {
+        self.digits = text
+            .chars()
+            .filter(char::is_ascii_digit)
+            .take(MAX_SEED_DIGITS)
+            .collect();
+    }
 }
 
 /// The text inside the seed field.
 #[derive(Component)]
 struct SeedText;
 
+/// The seed field's own box, so its border can be dimmed while a share code
+/// holds it inert, and accented while it holds the keystrokes.
+#[derive(Component)]
+struct SeedFieldBox;
+
 fn seed_field() -> impl Bundle {
     (
+        SeedFieldBox,
         Node {
             width: Val::Px(200.0),
             padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
@@ -265,9 +372,29 @@ fn seed_field() -> impl Bundle {
     )
 }
 
-/// Collects digits while the New Game screen is up. There is nothing else on
-/// the screen to type into, so the field needs no focus of its own.
-fn type_seed(keys: Res<ButtonInput<KeyCode>>, mut typed: ResMut<SeedInput>) {
+/// Collects digits while the New Game screen is up and this field holds
+/// focus.
+fn type_seed(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut typed: ResMut<SeedInput>,
+    mut clipboard: ResMut<Clipboard>,
+    share: Res<ShareCodeInput>,
+    focus: Res<FocusedField>,
+) {
+    if *focus != FocusedField::Seed || share.decoded().is_some() {
+        return;
+    }
+
+    let paste = keys.just_pressed(KeyCode::KeyV)
+        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight])
+            || keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight]));
+    if paste {
+        if let Some(Ok(text)) = clipboard.fetch_text().poll_result() {
+            typed.set_digits(&text);
+        }
+        return;
+    }
+
     const DIGITS: [(KeyCode, char); 20] = [
         (KeyCode::Digit0, '0'),
         (KeyCode::Digit1, '1'),
@@ -303,42 +430,277 @@ fn type_seed(keys: Res<ButtonInput<KeyCode>>, mut typed: ResMut<SeedInput>) {
 
 fn show_seed_input(
     typed: Res<SeedInput>,
+    share: Res<ShareCodeInput>,
+    focus: Res<FocusedField>,
     mut fields: Query<(&mut Text, &mut TextColor), With<SeedText>>,
+    mut boxes: Query<&mut BorderColor, With<SeedFieldBox>>,
 ) {
-    if !typed.is_changed() {
+    if !typed.is_changed() && !share.is_changed() && !focus.is_changed() {
         return;
     }
+    let locked = share.decoded().is_some();
     for (mut label, mut color) in &mut fields {
         if typed.digits.is_empty() {
             label.0 = "random".to_string();
             color.0 = theme::TEXT_DIM;
         } else {
             label.0 = typed.digits.clone();
-            color.0 = theme::TEXT;
+            color.0 = if locked { theme::TEXT_DIM } else { theme::TEXT };
         }
+    }
+    let border = field_border(*focus == FocusedField::Seed, locked);
+    for mut border_color in &mut boxes {
+        *border_color = BorderColor::all(border);
+    }
+}
+
+// --- typing a share code -----------------------------------------------------
+
+/// A share code the player is typing or has pasted on the New Game screen.
+/// Empty, or not yet a complete code, leaves size, difficulty and the seed
+/// field to manual selection.
+///
+/// Rolled by hand like [`SeedInput`], for the same reason: the field only
+/// ever holds the characters a share code can, which keeps it small.
+#[derive(Resource, Default)]
+pub struct ShareCodeInput {
+    text: String,
+}
+
+/// Two digits for the largest board size, one difficulty letter, and enough
+/// digits for any `u64` seed.
+const MAX_SHARE_CODE_LEN: usize = 2 + 1 + MAX_SEED_DIGITS;
+
+impl ShareCodeInput {
+    /// The puzzle it decodes to, or `None` while the field is empty or
+    /// incomplete.
+    ///
+    /// Visible to [`crate::capture`], which sets a code directly to screenshot
+    /// the locked New Game screen without driving real keystrokes.
+    pub(crate) fn decoded(&self) -> Option<PuzzleSeed> {
+        PuzzleSeed::parse(&self.text)
+    }
+
+    fn push_char(&mut self, c: char) {
+        if self.text.len() < MAX_SHARE_CODE_LEN {
+            self.text.push(c);
+        }
+    }
+
+    fn backspace(&mut self) {
+        self.text.pop();
+    }
+
+    /// Replaces the field with the alphanumerics found in `text`, upper-cased
+    /// and capped, dropping anything else a paste might carry along.
+    pub(crate) fn set_text(&mut self, text: &str) {
+        self.text = text
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .map(|c| c.to_ascii_uppercase())
+            .take(MAX_SHARE_CODE_LEN)
+            .collect();
+    }
+}
+
+/// The text inside the share code field.
+#[derive(Component)]
+struct ShareCodeText;
+
+/// The share code field's own box, so its border can show which field holds
+/// focus.
+#[derive(Component)]
+struct ShareCodeFieldBox;
+
+fn share_code_field() -> impl Bundle {
+    (
+        ShareCodeFieldBox,
+        Node {
+            width: Val::Px(200.0),
+            padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border: UiRect::all(Val::Px(1.0)),
+            border_radius: BorderRadius::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(theme::BACKGROUND),
+        BorderColor::all(theme::PANEL_EDGE),
+        children![(
+            theme::text("none", 19.0, theme::TEXT_DIM),
+            ShareCodeText,
+            TextLayout::no_wrap(),
+        )],
+    )
+}
+
+/// Collects a share code while the New Game screen is up and this field holds
+/// focus.
+fn type_share_code(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut typed: ResMut<ShareCodeInput>,
+    mut clipboard: ResMut<Clipboard>,
+    focus: Res<FocusedField>,
+) {
+    if *focus != FocusedField::ShareCode {
+        return;
+    }
+
+    let paste = keys.just_pressed(KeyCode::KeyV)
+        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight])
+            || keys.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight]));
+    if paste {
+        if let Some(Ok(text)) = clipboard.fetch_text().poll_result() {
+            typed.set_text(&text);
+        }
+        return;
+    }
+
+    const CHARS: [(KeyCode, char); 14] = [
+        (KeyCode::Digit0, '0'),
+        (KeyCode::Digit1, '1'),
+        (KeyCode::Digit2, '2'),
+        (KeyCode::Digit3, '3'),
+        (KeyCode::Digit4, '4'),
+        (KeyCode::Digit5, '5'),
+        (KeyCode::Digit6, '6'),
+        (KeyCode::Digit7, '7'),
+        (KeyCode::Digit8, '8'),
+        (KeyCode::Digit9, '9'),
+        (KeyCode::KeyE, 'E'),
+        (KeyCode::KeyM, 'M'),
+        (KeyCode::KeyH, 'H'),
+        (KeyCode::KeyX, 'X'),
+    ];
+
+    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::Delete) {
+        typed.backspace();
+    }
+    for (key, c) in CHARS {
+        if keys.just_pressed(key) {
+            typed.push_char(c);
+        }
+    }
+}
+
+fn show_share_code_input(
+    typed: Res<ShareCodeInput>,
+    focus: Res<FocusedField>,
+    mut fields: Query<&mut Text, With<ShareCodeText>>,
+    mut boxes: Query<&mut BorderColor, With<ShareCodeFieldBox>>,
+) {
+    if !typed.is_changed() && !focus.is_changed() {
+        return;
+    }
+    for mut label in &mut fields {
+        label.0 = if typed.text.is_empty() {
+            "none".to_string()
+        } else {
+            typed.text.clone()
+        };
+    }
+    // Never locked/disabled itself, unlike the seed field.
+    let border = field_border(*focus == FocusedField::ShareCode, false);
+    for mut border_color in &mut boxes {
+        *border_color = BorderColor::all(border);
+    }
+}
+
+/// A field's border: dimmed while a share code holds it inert, accented while
+/// it holds the player's keystrokes, and the plain panel edge otherwise.
+fn field_border(focused: bool, locked: bool) -> Color {
+    if locked {
+        theme::PANEL
+    } else if focused {
+        theme::ACCENT
+    } else {
+        theme::PANEL_EDGE
+    }
+}
+
+/// Dims a button label the same way its background dims, so a locked row
+/// does not read as fully lit but for one highlighted option.
+fn label_tint(selected: bool, locked: bool) -> Color {
+    if !selected && locked {
+        theme::TEXT_DIM
+    } else {
+        theme::TEXT
+    }
+}
+
+/// Dims the Seed row's own "Clear" button while a share code makes it a
+/// no-op, matching the field it belongs to.
+fn dim_seed_clear_button(
+    share: Res<ShareCodeInput>,
+    mut buttons: Query<(&mut theme::ButtonTint, &Children), With<SeedClearButton>>,
+    mut labels: Query<&mut TextColor>,
+) {
+    if !share.is_changed() {
+        return;
+    }
+    let locked = share.decoded().is_some();
+    let base = if locked { theme::PANEL } else { theme::BUTTON };
+    let text_color = if locked { theme::TEXT_DIM } else { theme::TEXT };
+    for (mut tint, children) in &mut buttons {
+        if tint.base != base {
+            tint.base = base;
+        }
+        dim_label(children, &mut labels, text_color);
     }
 }
 
 fn highlight_size_options(
     save: Res<SaveData>,
-    mut options: Query<(&SizeOption, &mut theme::ButtonTint)>,
+    share: Res<ShareCodeInput>,
+    mut options: Query<(&SizeOption, &mut theme::ButtonTint, &Children)>,
+    mut labels: Query<&mut TextColor>,
 ) {
-    for (option, mut tint) in &mut options {
-        let base = selected_tint(option.0 == save.settings.size);
+    let locked = share.decoded();
+    let selected_size = locked.map_or(save.settings.size, |seed| seed.size);
+    for (option, mut tint, children) in &mut options {
+        let selected = option.0 == selected_size;
+        let base = option_tint(selected, locked.is_some());
         if tint.base != base {
             tint.base = base;
         }
+        dim_label(
+            children,
+            &mut labels,
+            label_tint(selected, locked.is_some()),
+        );
     }
 }
 
 fn highlight_difficulty_options(
     save: Res<SaveData>,
-    mut options: Query<(&DifficultyOption, &mut theme::ButtonTint)>,
+    share: Res<ShareCodeInput>,
+    mut options: Query<(&DifficultyOption, &mut theme::ButtonTint, &Children)>,
+    mut labels: Query<&mut TextColor>,
 ) {
-    for (option, mut tint) in &mut options {
-        let base = selected_tint(option.0 == save.settings.difficulty);
+    let locked = share.decoded();
+    let selected_difficulty = locked.map_or(save.settings.difficulty, |seed| seed.difficulty);
+    for (option, mut tint, children) in &mut options {
+        let selected = option.0 == selected_difficulty;
+        let base = option_tint(selected, locked.is_some());
         if tint.base != base {
             tint.base = base;
+        }
+        dim_label(
+            children,
+            &mut labels,
+            label_tint(selected, locked.is_some()),
+        );
+    }
+}
+
+/// Sets every text child's colour, for the buttons whose label is a single
+/// child with no marker of its own to query by.
+fn dim_label(children: &Children, labels: &mut Query<&mut TextColor>, color: Color) {
+    for &child in children {
+        if let Ok(mut label_color) = labels.get_mut(child)
+            && label_color.0 != color
+        {
+            label_color.0 = color;
         }
     }
 }
@@ -348,6 +710,16 @@ fn selected_tint(selected: bool) -> Color {
         theme::ACCENT
     } else {
         theme::BUTTON
+    }
+}
+
+/// Like [`selected_tint`], but dims every option that is not the one a share
+/// code decoded to, since none of them can be clicked while it holds.
+fn option_tint(selected: bool, locked: bool) -> Color {
+    match (selected, locked) {
+        (true, _) => theme::ACCENT,
+        (false, true) => theme::PANEL,
+        (false, false) => theme::BUTTON,
     }
 }
 
@@ -595,5 +967,150 @@ mod tests {
         let mut typed = SeedInput::default();
         typed.backspace();
         assert_eq!(typed.seed(), None);
+    }
+
+    /// A pasted seed is copied with a leading `#`, and may land on top of
+    /// digits the player already typed; both have to be handled.
+    #[test]
+    fn pasting_replaces_the_field_with_the_digits_it_carries() {
+        let mut typed = SeedInput::default();
+        typed.push_digit('1');
+        typed.set_digits("#20260905");
+        assert_eq!(typed.seed(), Some(20_260_905));
+    }
+
+    #[test]
+    fn a_pasted_seed_is_capped_like_a_typed_one() {
+        let mut typed = SeedInput::default();
+        typed.set_digits(&"9".repeat(MAX_SEED_DIGITS * 2));
+        assert_eq!(typed.digits.len(), MAX_SEED_DIGITS, "capped");
+    }
+
+    #[test]
+    fn an_empty_share_code_field_decodes_to_nothing() {
+        assert_eq!(ShareCodeInput::default().decoded(), None);
+    }
+
+    #[test]
+    fn a_full_share_code_decodes_to_its_puzzle_seed() {
+        let mut typed = ShareCodeInput::default();
+        typed.set_text("10H392854");
+        assert_eq!(
+            typed.decoded(),
+            Some(PuzzleSeed::new(10, queens_core::Difficulty::Hard, 392_854))
+        );
+    }
+
+    /// While the code is still being typed or pasted, size and difficulty
+    /// stay on manual selection rather than locking onto a partial guess.
+    #[test]
+    fn an_incomplete_share_code_does_not_decode() {
+        let mut typed = ShareCodeInput::default();
+        typed.set_text("10H");
+        assert_eq!(typed.decoded(), None);
+    }
+
+    /// A share code is meant to be pasted, and a clumsy paste may carry stray
+    /// punctuation or the wrong case along with it.
+    #[test]
+    fn pasting_strips_punctuation_and_upper_cases_the_code() {
+        let mut typed = ShareCodeInput::default();
+        typed.set_text("10h-392854");
+        assert_eq!(
+            typed.decoded(),
+            Some(PuzzleSeed::new(10, queens_core::Difficulty::Hard, 392_854))
+        );
+    }
+
+    #[test]
+    fn a_pasted_share_code_is_capped() {
+        let mut typed = ShareCodeInput::default();
+        typed.set_text(&"9".repeat(MAX_SHARE_CODE_LEN * 2));
+        assert_eq!(typed.text.len(), MAX_SHARE_CODE_LEN, "capped");
+    }
+
+    /// The two fields used to be driven by two systems that both watched
+    /// every digit key, gated only by whether a code had *already* fully
+    /// decoded. Typing a digit that completed a code (the last key of "5E1")
+    /// landed in both fields on the same frame, since the seed field's system
+    /// still saw the pre-keystroke, not-yet-decoded state: the size digit and
+    /// the seed digit both leaked in, turning a seed of `1` into `51`. Real
+    /// focus, checked by both systems before either touches its own field,
+    /// removes the shared state that raced.
+    #[test]
+    fn typing_a_share_code_never_touches_the_seed_field() {
+        use bevy::ecs::system::RunSystemOnce;
+
+        let mut world = World::new();
+        world.init_resource::<SeedInput>();
+        world.init_resource::<ShareCodeInput>();
+        world.init_resource::<FocusedField>();
+        world.init_resource::<ButtonInput<KeyCode>>();
+        world.init_resource::<Clipboard>();
+
+        // "5", "E", "1" pressed one at a time, each its own frame: both
+        // systems run every frame, exactly as they do in the real Update
+        // schedule.
+        for key in [KeyCode::Digit5, KeyCode::KeyE, KeyCode::Digit1] {
+            world.resource_mut::<ButtonInput<KeyCode>>().press(key);
+            world.run_system_once(type_seed).unwrap();
+            world.run_system_once(type_share_code).unwrap();
+            world.resource_mut::<ButtonInput<KeyCode>>().clear();
+        }
+
+        assert_eq!(world.resource::<SeedInput>().digits, "");
+        assert_eq!(
+            world.resource::<ShareCodeInput>().decoded(),
+            Some(PuzzleSeed::new(5, queens_core::Difficulty::Easy, 1))
+        );
+    }
+
+    /// Starting a share-code puzzle bypasses the size/difficulty buttons, but
+    /// must still leave `settings` describing the puzzle that was just
+    /// started, or "New Puzzle" on the victory screen and the toolbar's "New"
+    /// would snap back to whatever was last manually selected instead of
+    /// continuing from it.
+    #[test]
+    fn starting_a_share_code_puzzle_updates_settings_to_match() {
+        let mut settings = crate::persistence::Settings::default();
+        let code = PuzzleSeed::new(5, queens_core::Difficulty::Easy, 1);
+
+        let started = resolve_puzzle(&mut settings, None, Some(code));
+
+        assert_eq!(started, code);
+        assert_eq!(settings.size, 5);
+        assert_eq!(settings.difficulty, queens_core::Difficulty::Easy);
+    }
+
+    #[test]
+    fn a_typed_seed_combines_with_the_current_settings() {
+        let mut settings = crate::persistence::Settings {
+            size: 9,
+            difficulty: queens_core::Difficulty::Hard,
+            ..crate::persistence::Settings::default()
+        };
+
+        let started = resolve_puzzle(&mut settings, Some(42), None);
+
+        assert_eq!(
+            started,
+            PuzzleSeed::new(9, queens_core::Difficulty::Hard, 42)
+        );
+    }
+
+    /// With neither a share code nor a typed seed, a fresh puzzle still has
+    /// to match the current settings, not just any size and difficulty.
+    #[test]
+    fn no_seed_at_all_still_matches_the_current_settings() {
+        let mut settings = crate::persistence::Settings {
+            size: 11,
+            difficulty: queens_core::Difficulty::Expert,
+            ..crate::persistence::Settings::default()
+        };
+
+        let started = resolve_puzzle(&mut settings, None, None);
+
+        assert_eq!(started.size, 11);
+        assert_eq!(started.difficulty, queens_core::Difficulty::Expert);
     }
 }

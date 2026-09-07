@@ -89,15 +89,20 @@ Board size and difficulty are chosen independently, so an Easy 11×11 and an
 Expert 6×6 are both perfectly reasonable requests. Outside Easy, every region
 holds at least two cells — a one-cell region places its own queen for nothing.
 
-## Seeds
+## Seeds and share codes
 
-Every puzzle is reproducible from an eight-digit seed, shown in the top bar
-during play and on the victory panel. Click the one in the top bar to copy it.
-Type it into the **Seed** box on the New Game screen to play that exact board
-again, or leave the box blank for something new.
+Every puzzle is reproducible from its board size, difficulty and RNG seed,
+shown together as a share code in the top bar during play and on the victory
+panel. Click it to copy it, then paste it into the **Share code** box on the
+New Game screen to play that exact puzzle again - board size and difficulty
+lock to what the code says while it is set.
 
-Saved games store only the seed, so the resume slot is a few bytes and the board
-is rebuilt on load.
+To reuse just the seed at a size or difficulty of your own choosing, type it
+into the separate **Seed** box instead and pick size and difficulty as usual,
+or leave both boxes blank for something new.
+
+Saved games store only the seed, size and difficulty, so the resume slot is a
+few bytes and the board is rebuilt on load.
 
 ## Settings and progress
 

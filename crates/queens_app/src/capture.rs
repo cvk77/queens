@@ -101,6 +101,28 @@ const SCRIPT: &[Beat] = &[
         seconds: 3.0,
         action: |commands, ctx| ctx.shoot(commands, "2-new-game"),
     },
+    // A share code entered directly on the resource, rather than through real
+    // key events: this checks what locking renders (the dimmed size,
+    // difficulty and seed controls), not how a keystroke gets routed to the
+    // field that should receive it.
+    Beat {
+        seconds: 3.1,
+        action: |commands, _ctx| {
+            let mut code = crate::menu::ShareCodeInput::default();
+            code.set_text("5E1");
+            commands.insert_resource(code);
+        },
+    },
+    Beat {
+        seconds: 3.3,
+        action: |commands, ctx| ctx.shoot(commands, "2b-new-game-share-code-locked"),
+    },
+    Beat {
+        seconds: 3.4,
+        action: |commands, _ctx| {
+            commands.insert_resource(crate::menu::ShareCodeInput::default());
+        },
+    },
     Beat {
         seconds: 3.5,
         action: |commands, ctx| {

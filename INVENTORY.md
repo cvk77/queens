@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 23 source files, ~8,100 lines, three crates. Start with
+A map of the codebase: 23 source files, ~9,000 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -22,7 +22,7 @@ the task index, then the per-file notes.
 | Undo, auto-cross, hint requests, the hint tally | `queens_app/src/session.rs` |
 | Top bar, toolbar, timer, hint line | `queens_app/src/game/hud.rs` |
 | Pause / victory overlays, win detection, autosave | `queens_app/src/game/mod.rs` |
-| Menus, size/difficulty pickers, seed entry | `queens_app/src/menu.rs` |
+| Menus, size/difficulty pickers, seed and share code entry | `queens_app/src/menu.rs` |
 | Save file, settings, statistics | `queens_app/src/persistence.rs` |
 | The loading screen and background generation | `queens_app/src/generation.rs` |
 | Screens and sub-states | `queens_app/src/states.rs` |
@@ -30,19 +30,19 @@ the task index, then the per-file notes.
 
 ## `queens_core` — the puzzle, with no engine attached
 
-Only depends on `serde`. 60 tests (2 of them `#[ignore]` diagnostics).
+Only depends on `serde`. 70 tests (2 of them `#[ignore]` diagnostics).
 
 | File | Lines | What is in it |
 |---|---|---|
 | `lib.rs` | 50 | Module list, re-exports, a doctest showing the basic flow |
 | `board.rs` | 358 | `Coord` (with `touches`, `neighbours`), `Side`, `Mark`, `Puzzle`, `BoardState`, `MIN_SIZE` = 5, `MAX_SIZE` = 12 |
 | `rules.rs` | 253 | `violations`, `conflicting_cells`, `is_solved`, `rules_out`, `eliminated_by`, `auto_cross` |
-| `rating.rs` | 200 | `RuleId` (7 rules, each with a `name` and a player-facing `description`), `Difficulty`, `Rating`, `min_region_size` |
+| `rating.rs` | 242 | `RuleId` (7 rules, each with a `name` and a player-facing `description`), `Difficulty` (with a share-code `letter`/`from_letter`), `Rating`, `min_region_size` |
 | `solver.rs` | 259 | Exhaustive bitmask search: `count_solutions`, `has_unique_solution`, `solve_first`, `find_alternative` |
 | `logic.rs` | 1446 | The deductive solver: `Grid`, the seven rules, `rate_layout`, `next_hint`, `Hint`/`HintKind`, `RegionNames` |
 | `generator.rs` | 983 | `generate`, `generate_with_stats`, region growth, `repair_towards_uniqueness`, `make_room`, `smallest_region`, `regions_are_valid` |
 | `rng.rs` | 179 | Vendored SplitMix64 `Rng`, `entropy_seed`, `MAX_FRESH_SEED` |
-| `seed.rs` | 37 | `PuzzleSeed` — size, requested difficulty, `u64` |
+| `seed.rs` | 118 | `PuzzleSeed` — size, requested difficulty, `u64`; `Display`/`parse` encode and decode it as a share code |
 | `test_support.rs` | 68 | `#[cfg(test)]` only: build boards from ASCII letters |
 
 `Puzzle` is deliberately opaque — built only by `generate`, with invariants
@@ -73,22 +73,22 @@ regeneration from its seed.
 
 ## `queens_app` — the game
 
-26 tests.
+39 tests.
 
 | File | Lines | What is in it |
 |---|---|---|
-| `main.rs` | 52 | `App` setup, plugin registration, the camera, `#![allow(clippy::type_complexity)]` |
+| `main.rs` | 68 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
 | `theme.rs` | 366 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`/`footnote`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 99 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, animates the ellipsis |
-| `menu.rs` | 599 | Main menu (with the version and copyright line), New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
+| `menu.rs` | 1116 | Main menu (with the version and copyright line), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
 | `game/mod.rs` | 227 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
 | `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
-| `game/hud.rs` | 399 | Top bar (size, difficulty, seed-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
+| `game/hud.rs` | 395 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
 | `game/interaction.rs` | 495 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts |
-| `capture.rs` | 650 | The scripted run: screenshots every screen and asserts real pointer gestures |
+| `capture.rs` | 672 | The scripted run: screenshots every screen and asserts real pointer gestures |
 
 ### How a game starts
 
@@ -113,6 +113,8 @@ automatic.
 | `Session` | `session.rs` | Only during `Playing` — gate systems on `resource_exists::<Session>` |
 | `PaintStroke` | `game/interaction.rs` | Always |
 | `SeedInput` | `menu.rs` | Always |
+| `ShareCodeInput` | `menu.rs` | Always |
+| `FocusedField` | `menu.rs` | Always |
 
 ## Tests
 
@@ -124,10 +126,12 @@ automatic.
 | `queens_core/src/solver.rs` | 6 | Counting, caps, agreement with brute force |
 | `queens_core/src/board.rs` | 5 | Geometry, adjacency, mark cycle |
 | `queens_core/src/rng.rs` | 5 | Reproducibility, uniformity, shuffle |
+| `queens_core/src/rating.rs` | 3 | Difficulty letter round-tripping, case, an unknown letter |
+| `queens_core/src/seed.rs` | 7 | Share code round-tripping through `Display`/`parse`, and its rejection cases |
 | `queens_app/src/game/interaction.rs` | 10 | The gesture state machine, including a tap that drifts off its cell |
 | `queens_app/src/session.rs` | 8 | Queen removal taking its auto-crosses, undo, when a hint counts |
 | `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
-| `queens_app/src/menu.rs` | 5 | Seed field parsing and its digit cap, the copyright line staying ASCII |
+| `queens_app/src/menu.rs` | 16 | Seed and share code field parsing, their character caps, focus keeping keystrokes out of the wrong field, settings syncing to a started share code, the copyright line staying ASCII |
 | `queens_app/src/game/hud.rs` | 1 | The wordiest hint fitting the message slot |
 | `queens_app/src/theme.rs` | 2 | Every region colour having a distinct ASCII name |
 

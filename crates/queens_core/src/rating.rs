@@ -171,6 +171,23 @@ impl Difficulty {
             .into_iter()
             .find(|d| d.name().eq_ignore_ascii_case(s))
     }
+
+    /// A single-character tag for a share code. `X` for Expert, since `E` is
+    /// Easy's.
+    pub const fn letter(self) -> char {
+        match self {
+            Difficulty::Easy => 'E',
+            Difficulty::Medium => 'M',
+            Difficulty::Hard => 'H',
+            Difficulty::Expert => 'X',
+        }
+    }
+
+    /// Parses a share code's difficulty letter case-insensitively.
+    pub fn from_letter(c: char) -> Option<Self> {
+        let upper = c.to_ascii_uppercase();
+        ALL_DIFFICULTIES.into_iter().find(|d| d.letter() == upper)
+    }
 }
 
 impl fmt::Display for Difficulty {
@@ -196,5 +213,30 @@ impl Rating {
     /// How many times `rule` fired while solving.
     pub fn count(&self, rule: RuleId) -> u16 {
         self.rule_counts[rule.index()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_difficulty_letter_round_trips() {
+        for difficulty in ALL_DIFFICULTIES {
+            assert_eq!(
+                Difficulty::from_letter(difficulty.letter()),
+                Some(difficulty)
+            );
+        }
+    }
+
+    #[test]
+    fn from_letter_is_case_insensitive() {
+        assert_eq!(Difficulty::from_letter('h'), Some(Difficulty::Hard));
+    }
+
+    #[test]
+    fn from_letter_rejects_an_unknown_letter() {
+        assert_eq!(Difficulty::from_letter('Z'), None);
     }
 }

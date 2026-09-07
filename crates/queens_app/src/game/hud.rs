@@ -79,15 +79,11 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
             19.0,
             theme::TEXT,
         ));
-        // The seed, so a puzzle worth keeping can be played again. Clicking it
-        // copies the digits: a long seed is easy to mistype and there is a
+        // The share code, so a puzzle worth keeping can be played again.
+        // Clicking it copies the code: it is easy to mistype and there is a
         // field on the New Game screen waiting for it.
         bar.spawn((
-            theme::text(
-                format!("#{}", session.puzzle.seed().seed),
-                15.0,
-                theme::TEXT_DIM,
-            ),
+            theme::text(format!("#{}", session.puzzle.seed()), 15.0, theme::TEXT_DIM),
             Node {
                 margin: UiRect::left(Val::Px(10.0)),
                 ..default()
@@ -139,18 +135,18 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
     });
 }
 
-/// Puts the seed on the clipboard.
+/// Puts the puzzle's share code on the clipboard.
 ///
-/// The digits alone: the leading `#` is decoration, and the seed field on the
-/// New Game screen takes digits.
+/// The code alone: the leading `#` is decoration, and the share code field on
+/// the New Game screen takes exactly this, size and difficulty included.
 fn copy_seed(
     _click: On<Pointer<Click>>,
     session: Res<Session>,
     mut clipboard: ResMut<Clipboard>,
     mut acknowledgement: Query<(&mut Text, &mut SeedCopied)>,
 ) {
-    let seed = session.puzzle.seed().seed;
-    let said = match clipboard.set_text(seed.to_string()) {
+    let share_code = session.puzzle.seed().to_string();
+    let said = match clipboard.set_text(share_code) {
         Ok(()) => "copied",
         Err(error) => {
             // A desktop without a clipboard, or one that refused it, is not
