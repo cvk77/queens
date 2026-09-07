@@ -209,6 +209,18 @@ pub fn subtitle(content: impl Into<String>) -> impl Bundle {
     text(content, 17.0, TEXT_DIM)
 }
 
+/// Small print. Sits below the content it belongs to and stays out of the way
+/// of it.
+pub fn footnote(content: impl Into<String>) -> impl Bundle {
+    (
+        text(content, 13.0, TEXT_DIM),
+        Node {
+            margin: UiRect::top(Val::Px(6.0)),
+            ..default()
+        },
+    )
+}
+
 /// Remembers a button's resting colour so hover and press can be layered on top
 /// without losing it — selectable buttons change their base as they toggle.
 #[derive(Component, Clone, Copy)]

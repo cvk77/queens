@@ -11,7 +11,7 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 82 tests + 1 doctest
+cargo test --workspace                      # 83 tests + 1 doctest
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p queens_app                     # play

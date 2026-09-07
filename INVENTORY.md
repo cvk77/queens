@@ -79,11 +79,11 @@ regeneration from its seed.
 |---|---|---|
 | `main.rs` | 52 | `App` setup, plugin registration, the camera, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
-| `theme.rs` | 354 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
+| `theme.rs` | 366 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`/`footnote`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 99 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, animates the ellipsis |
-| `menu.rs` | 577 | Main menu, New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
+| `menu.rs` | 599 | Main menu (with the version and copyright line), New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
 | `game/mod.rs` | 227 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
 | `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
 | `game/hud.rs` | 305 | Top bar (size, difficulty, seed, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
@@ -127,7 +127,7 @@ automatic.
 | `queens_app/src/game/interaction.rs` | 7 | The gesture state machine |
 | `queens_app/src/session.rs` | 8 | Queen removal taking its auto-crosses, undo, when a hint counts |
 | `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
-| `queens_app/src/menu.rs` | 4 | Seed field parsing and its digit cap |
+| `queens_app/src/menu.rs` | 5 | Seed field parsing and its digit cap, the copyright line staying ASCII |
 | `queens_app/src/game/hud.rs` | 1 | The wordiest hint fitting the message slot |
 | `queens_app/src/theme.rs` | 2 | Every region colour having a distinct ASCII name |
 

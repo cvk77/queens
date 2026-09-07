@@ -87,8 +87,22 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
                     },
                 );
             });
+
+            screen.spawn(theme::footnote(COPYRIGHT));
         });
 }
+
+/// The build and who owns it, under the main menu.
+///
+/// The version comes from the workspace manifest, so a beta tester reporting a
+/// bug can read off which build they are on. "(c)" rather than the sign and
+/// "Kruechten" rather than the umlaut: the built-in font is an ASCII subset and
+/// renders anything else as an empty box.
+const COPYRIGHT: &str = concat!(
+    "Queens Puzzle ",
+    env!("CARGO_PKG_VERSION"),
+    ", (c) 2026 Christoph von Kruechten"
+);
 
 // --- new game --------------------------------------------------------------
 
@@ -537,6 +551,14 @@ fn highlight_toggles(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The built-in font is an ASCII subset, so a copyright sign or an umlaut
+    /// would render as an empty box on the first screen the player sees.
+    #[test]
+    fn the_copyright_line_is_plain_ascii() {
+        assert!(COPYRIGHT.is_ascii(), "{COPYRIGHT}");
+        assert!(COPYRIGHT.contains(env!("CARGO_PKG_VERSION")));
+    }
 
     #[test]
     fn an_empty_seed_field_means_pick_one() {
