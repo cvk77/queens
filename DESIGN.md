@@ -40,6 +40,15 @@ A puzzle's difficulty is the band of the hardest rule the solve required. The
 same engine serves hints, which is what guarantees a hint is always a step the
 player could have taken.
 
+A rule reasons about *units* — a row, a column, a region — and a hint has to
+name them in terms the player can see. Rows and columns are numbered along the
+edges of the board, so a number works. A region is only ever a colour, and
+nothing on screen numbers one, so `queens_core` takes the names from the caller
+([`RegionNames`]) rather than inventing an index: the game passes the colour
+names of whichever palette it is drawing with, colourblind or not.
+
+[`RegionNames`]: crates/queens_core/src/logic.rs
+
 **The bands were calibrated against data, not intuition.** The first cut put
 `CommonElimination` in Hard, which sounded right and was not: measuring which
 rule actually decides each puzzle (the `yield_rates` diagnostic in

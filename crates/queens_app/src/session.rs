@@ -2,7 +2,7 @@
 //! them.
 
 use bevy::prelude::*;
-use queens_core::{BoardState, Coord, Hint, Mark, Puzzle, logic, rules};
+use queens_core::{BoardState, Coord, Hint, Mark, Puzzle, RegionNames, logic, rules};
 
 /// How many board snapshots the undo stack keeps. A snapshot is one byte per
 /// cell (144 at most), so this is generous and still trivial.
@@ -22,7 +22,8 @@ pub struct Session {
     pub elapsed: f32,
     /// Cells currently breaking a rule, for highlighting.
     pub conflicts: Vec<Coord>,
-    /// The cell the last hint pointed at, cleared as soon as it is acted on.
+    /// The last hint and the cells it points at, cleared as soon as it is
+    /// acted on.
     pub hint: Option<Hint>,
     /// Which crosses the auto-cross assist put down, rather than the player.
     /// One flag per cell, row-major.
@@ -153,8 +154,12 @@ impl Session {
     }
 
     /// Asks the deductive solver what the player could work out next.
-    pub fn request_hint(&mut self) {
-        self.hint = Some(logic::next_hint(&self.puzzle, &self.board));
+    ///
+    /// `names` comes from the palette the board is drawn with, so the
+    /// explanation can point at a colour rather than a region index that
+    /// appears nowhere on screen.
+    pub fn request_hint(&mut self, names: RegionNames<'_>) {
+        self.hint = Some(logic::next_hint(&self.puzzle, &self.board, names));
     }
 
     /// Removes the assist's crosses that no remaining queen justifies.

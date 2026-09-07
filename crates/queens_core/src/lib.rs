@@ -44,7 +44,7 @@ pub(crate) mod test_support;
 
 pub use board::{ALL_SIDES, BoardState, Coord, MAX_SIZE, MIN_SIZE, Mark, Puzzle, Side};
 pub use generator::generate;
-pub use logic::{Hint, HintKind};
+pub use logic::{Hint, HintKind, RegionNames};
 pub use rating::{ALL_DIFFICULTIES, Difficulty, Rating, RuleId};
 pub use rng::Rng;
 pub use seed::PuzzleSeed;

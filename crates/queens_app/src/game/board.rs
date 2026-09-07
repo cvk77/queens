@@ -16,6 +16,12 @@ const BOARD_VMIN: f32 = 66.0;
 const REGION_BORDER_PX: f32 = 2.0;
 /// Hairline between two cells of the same region.
 const CELL_BORDER_PX: f32 = 1.0;
+/// The frame drawn around the whole grid.
+const BOARD_BORDER_PX: f32 = 3.0;
+/// Space between the board and the numbers running alongside it.
+const RULER_GAP_PX: f32 = 6.0;
+/// Small enough to read as an annotation rather than part of the puzzle.
+const RULER_FONT_PX: f32 = 13.0;
 
 /// One square of the board.
 #[derive(Component, Clone, Copy)]
@@ -31,31 +37,103 @@ pub(crate) struct QueenMark;
 #[derive(Component)]
 pub(crate) struct CrossMark;
 
-/// Builds the grid and every cell inside it, as a child of `parent`.
+/// Builds the board — the ruler of row and column numbers, the grid, and every
+/// cell inside it — as a child of `parent`.
+///
+/// The whole thing is one CSS grid so the rulers cannot drift out of step with
+/// the cells: `auto` tracks take their size from the board node itself.
 pub fn spawn_grid(parent: &mut ChildSpawnerCommands, session: &Session, save: &SaveData) {
     let puzzle = &session.puzzle;
     let size = puzzle.size();
 
     parent
-        .spawn((
+        .spawn(Node {
+            display: Display::Grid,
+            grid_template_columns: vec![GridTrack::auto(), GridTrack::auto()],
+            grid_template_rows: vec![GridTrack::auto(), GridTrack::auto()],
+            column_gap: Val::Px(RULER_GAP_PX),
+            row_gap: Val::Px(RULER_GAP_PX),
+            ..default()
+        })
+        .with_children(|frame| {
+            // The corner between the two rulers stays empty.
+            frame.spawn(Node {
+                grid_column: GridPlacement::start(1),
+                grid_row: GridPlacement::start(1),
+                ..default()
+            });
+            frame.spawn(ruler(size, false));
+            frame.spawn(ruler(size, true));
+
+            frame
+                .spawn((
+                    Node {
+                        grid_column: GridPlacement::start(2),
+                        grid_row: GridPlacement::start(2),
+                        display: Display::Grid,
+                        grid_template_columns: RepeatedGridTrack::flex(u16::from(size), 1.0),
+                        grid_template_rows: RepeatedGridTrack::flex(u16::from(size), 1.0),
+                        width: Val::VMin(BOARD_VMIN),
+                        height: Val::VMin(BOARD_VMIN),
+                        border: UiRect::all(Val::Px(BOARD_BORDER_PX)),
+                        border_radius: BorderRadius::all(Val::Px(6.0)),
+                        ..default()
+                    },
+                    BackgroundColor(theme::REGION_EDGE),
+                    BorderColor::all(theme::REGION_EDGE),
+                ))
+                .with_children(|grid| {
+                    for coord in puzzle.cells() {
+                        spawn_cell(grid, puzzle, coord, save);
+                    }
+                });
+        });
+}
+
+/// A strip of 1-based numbers running alongside the board, so a hint naming
+/// "row 3" or "column 8" points somewhere the player can actually count to.
+///
+/// The board's own border sits inside its width, so the strip is padded by that
+/// much to keep each number centred on its line.
+fn ruler(size: u8, vertical: bool) -> impl Bundle {
+    let tracks = RepeatedGridTrack::flex(u16::from(size), 1.0);
+    let border = Val::Px(BOARD_BORDER_PX);
+    let (node, labels) = if vertical {
+        (
             Node {
+                grid_column: GridPlacement::start(1),
+                grid_row: GridPlacement::start(2),
                 display: Display::Grid,
-                grid_template_columns: RepeatedGridTrack::flex(u16::from(size), 1.0),
-                grid_template_rows: RepeatedGridTrack::flex(u16::from(size), 1.0),
-                width: Val::VMin(BOARD_VMIN),
-                height: Val::VMin(BOARD_VMIN),
-                border: UiRect::all(Val::Px(3.0)),
-                border_radius: BorderRadius::all(Val::Px(6.0)),
+                grid_template_rows: tracks,
+                justify_items: JustifyItems::End,
+                align_items: AlignItems::Center,
+                padding: UiRect::vertical(border),
                 ..default()
             },
-            BackgroundColor(theme::REGION_EDGE),
-            BorderColor::all(theme::REGION_EDGE),
-        ))
-        .with_children(|grid| {
-            for coord in puzzle.cells() {
-                spawn_cell(grid, puzzle, coord, save);
-            }
-        });
+            size,
+        )
+    } else {
+        (
+            Node {
+                grid_column: GridPlacement::start(2),
+                grid_row: GridPlacement::start(1),
+                display: Display::Grid,
+                grid_template_columns: tracks,
+                justify_items: JustifyItems::Center,
+                align_items: AlignItems::End,
+                padding: UiRect::horizontal(border),
+                ..default()
+            },
+            size,
+        )
+    };
+
+    (
+        node,
+        Children::spawn(SpawnIter(
+            (1..=labels).map(|n| theme::text(n.to_string(), RULER_FONT_PX, theme::TEXT_DIM)),
+        )),
+    )
 }
 
 fn spawn_cell(grid: &mut ChildSpawnerCommands, puzzle: &Puzzle, coord: Coord, save: &SaveData) {
@@ -303,7 +381,9 @@ pub fn refresh_board(
     let concealed = *play_state.get() == PlayState::Paused;
 
     let hint = session.hint.as_ref();
-    let hint_cell = hint.and_then(|hint| hint.cell());
+    // A deduction usually clears several cells at once; showing them all is
+    // what makes the sentence explaining it check out.
+    let hint_cells = hint.map(|hint| hint.cells()).unwrap_or_default();
     // Colour says what the hint wants: green to place a queen, red for a mark
     // that does not belong, blue for a cell to cross off.
     let hint_colour = match hint.map(|hint| &hint.kind) {
@@ -319,7 +399,7 @@ pub fn refresh_board(
             Color::NONE
         } else if session.conflicts.contains(&cell.coord) {
             theme::DANGER
-        } else if hint_cell == Some(cell.coord) {
+        } else if hint_cells.contains(&cell.coord) {
             hint_colour
         } else {
             Color::NONE

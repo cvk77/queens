@@ -1,6 +1,7 @@
 //! The bars above and below the board: status, and the tools for solving.
 
 use bevy::prelude::*;
+use bevy::text::LineHeight;
 
 use crate::persistence::SaveData;
 use crate::session::{PuzzleRequest, Session};
@@ -18,6 +19,16 @@ pub(super) struct QueensLabel;
 /// Shows the most recent hint, or the puzzle's rating when there is none.
 #[derive(Component)]
 pub(super) struct MessageLabel;
+
+/// The commentary under the board.
+const MESSAGE_FONT_PX: f32 = 16.0;
+/// Pinned rather than left to the font's default so the reserved height below
+/// is an exact multiple of it.
+const MESSAGE_LINE_PX: f32 = 20.0;
+/// How many lines the commentary always occupies. The longest explanation the
+/// solver produces fits in three at any window width the game is playable at;
+/// a narrower one wraps further and the text is centred over the overflow.
+const MESSAGE_LINES: f32 = 3.0;
 
 /// Greyed out when there is nothing to undo or redo.
 #[derive(Component, Clone, Copy)]
@@ -88,26 +99,43 @@ pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
             ..default()
         },))
         .with_children(|column| {
-            column.spawn((
-                theme::text(
-                    format!("Hardest step needed: {}", hardest.name()),
-                    16.0,
-                    theme::TEXT_DIM,
-                ),
-                MessageLabel,
-                // Hint explanations are full sentences; keep them off the
-                // window edges and centred over the toolbar.
-                Node {
-                    max_width: Val::Percent(74.0),
+            // The commentary swings between one line and three as hints come
+            // and go. Its slot is a fixed height so the toolbar underneath and
+            // the board above stay put: a board that jumps every time the
+            // player asks for a hint is a board they lose their place on.
+            column
+                .spawn(Node {
+                    height: Val::Px(MESSAGE_LINE_PX * MESSAGE_LINES),
+                    // Full sentences, kept off the window edges and centred
+                    // over the toolbar.
+                    width: Val::Percent(74.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
                     ..default()
-                },
-                TextLayout::justify(Justify::Center),
-            ));
+                })
+                .with_children(|slot| {
+                    slot.spawn((
+                        Text::new(format!("Hardest step needed: {}", hardest.name())),
+                        // Spelled out rather than built from `theme::text` so
+                        // the line height is pinned: the slot above reserves a
+                        // whole number of these.
+                        TextFont {
+                            font_size: FontSize::Px(MESSAGE_FONT_PX),
+                            ..default()
+                        },
+                        LineHeight::Px(MESSAGE_LINE_PX),
+                        TextColor(theme::TEXT_DIM),
+                        MessageLabel,
+                        TextLayout::justify(Justify::Center),
+                    ));
+                });
 
             column.spawn(theme::row(10.0)).with_children(|row| {
                 row.spawn(theme::small_button("Hint")).observe(
-                    |_click: On<Pointer<Click>>, mut session: ResMut<Session>| {
-                        session.request_hint();
+                    |_click: On<Pointer<Click>>,
+                     mut session: ResMut<Session>,
+                     save: Res<SaveData>| {
+                        session.request_hint(theme::region_names(save.settings.colourblind));
                     },
                 );
                 row.spawn((theme::small_button("Undo"), HistoryButton::Undo))

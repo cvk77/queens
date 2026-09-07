@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 23 source files, ~7,300 lines, three crates. Start with
+A map of the codebase: 23 source files, ~7,600 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -30,7 +30,7 @@ the task index, then the per-file notes.
 
 ## `queens_core` — the puzzle, with no engine attached
 
-Only depends on `serde`. 55 tests (2 of them `#[ignore]` diagnostics).
+Only depends on `serde`. 57 tests (2 of them `#[ignore]` diagnostics).
 
 | File | Lines | What is in it |
 |---|---|---|
@@ -39,7 +39,7 @@ Only depends on `serde`. 55 tests (2 of them `#[ignore]` diagnostics).
 | `rules.rs` | 253 | `violations`, `conflicting_cells`, `is_solved`, `rules_out`, `eliminated_by`, `auto_cross` |
 | `rating.rs` | 163 | `RuleId` (7 rules), `Difficulty`, `Rating`, `min_region_size` |
 | `solver.rs` | 259 | Exhaustive bitmask search: `count_solutions`, `has_unique_solution`, `solve_first`, `find_alternative` |
-| `logic.rs` | 1177 | The deductive solver: `Grid`, the seven rules, `rate_layout`, `next_hint`, `Hint`/`HintKind` |
+| `logic.rs` | 1296 | The deductive solver: `Grid`, the seven rules, `rate_layout`, `next_hint`, `Hint`/`HintKind`, `RegionNames` |
 | `generator.rs` | 983 | `generate`, `generate_with_stats`, region growth, `repair_towards_uniqueness`, `make_room`, `smallest_region`, `regions_are_valid` |
 | `rng.rs` | 179 | Vendored SplitMix64 `Rng`, `entropy_seed`, `MAX_FRESH_SEED` |
 | `seed.rs` | 37 | `PuzzleSeed` — size, requested difficulty, `u64` |
@@ -54,7 +54,7 @@ row (`CellSet = [u16; 12]`), which is why `MAX_SIZE` is 12.
 ```rust
 generate(PuzzleSeed::new(9, Difficulty::Hard, 42)) -> Puzzle
 rules::is_solved(&puzzle, &board) -> bool
-logic::next_hint(&puzzle, &board) -> Hint
+logic::next_hint(&puzzle, &board, RegionNames::numbered()) -> Hint
 logic::rate_layout(size, regions) -> Option<Rating>
 solver::has_unique_solution(size, regions) -> bool
 generator::smallest_region(size, regions) -> usize
@@ -73,22 +73,22 @@ regeneration from its seed.
 
 ## `queens_app` — the game
 
-16 tests.
+18 tests.
 
 | File | Lines | What is in it |
 |---|---|---|
 | `main.rs` | 52 | `App` setup, plugin registration, the camera, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
-| `theme.rs` | 282 | Palette, both region palettes, `screen`/`panel`/`row`/`text`/`title`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
-| `session.rs` | 372 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance. Also `PuzzleRequest` and `Restore` |
+| `theme.rs` | 354 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
+| `session.rs` | 377 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 225 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 99 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, animates the ellipsis |
 | `menu.rs` | 562 | Main menu, New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
 | `game/mod.rs` | 217 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
-| `game/board.rs` | 345 | The grid, cell borders, the node-drawn queen and crown, `refresh_board` |
-| `game/hud.rs` | 225 | Top bar (size, difficulty, seed, clock, counter) and toolbar; `refresh_hud` |
-| `game/interaction.rs` | 343 | `PaintStroke`, the click/drag observers, keyboard shortcuts |
-| `capture.rs` | 601 | The scripted run: screenshots every screen and asserts real pointer gestures |
+| `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
+| `game/hud.rs` | 253 | Top bar (size, difficulty, seed, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
+| `game/interaction.rs` | 344 | `PaintStroke`, the click/drag observers, keyboard shortcuts |
+| `capture.rs` | 636 | The scripted run: screenshots every screen and asserts real pointer gestures |
 
 ### How a game starts
 

@@ -28,6 +28,7 @@ use queens_core::{Coord, Difficulty, Mark, PuzzleSeed};
 use crate::persistence::{InProgress, SaveData};
 use crate::session::{PuzzleRequest, Session};
 use crate::states::{AppState, PlayState};
+use crate::theme;
 
 /// The environment variable that turns this on and says where to write.
 const CAPTURE_ENV: &str = "QUEENS_CAPTURE";
@@ -51,6 +52,8 @@ pub struct CaptureContext<'a> {
     pub visible_marks: usize,
     /// A cell a beat wants later beats to work on.
     pub subject: &'a mut Option<Coord>,
+    /// A board position a beat wants a later one to compare against.
+    pub anchor: &'a mut Option<Vec2>,
     /// Pointer events to feed into the picking pipeline after this beat.
     pub pointer: Vec<(Vec2, PointerAction)>,
     /// Assertions this beat made, reported at the end of the run.
@@ -141,13 +144,33 @@ const SCRIPT: &[Beat] = &[
         seconds: 6.6,
         action: |commands, ctx| ctx.shoot(commands, "4-marks-and-conflict"),
     },
+    // Note where the board is before asking for a hint. A hint runs to two or
+    // three lines where the rating line is one, and the board must not shift
+    // under the player to make room for it.
+    Beat {
+        seconds: 6.9,
+        action: |_commands, ctx| {
+            *ctx.anchor = ctx.centre_of(Coord::new(0, 0));
+        },
+    },
     Beat {
         seconds: 7.0,
         action: |_commands, ctx| {
             if let Some(session) = ctx.session.as_deref_mut() {
                 session.reset();
-                session.request_hint();
+                session.request_hint(theme::region_names(ctx.save.settings.colourblind));
             }
+        },
+    },
+    Beat {
+        seconds: 7.5,
+        action: |_commands, ctx| {
+            let before = *ctx.anchor;
+            let after = ctx.centre_of(Coord::new(0, 0));
+            ctx.check(
+                format!("a hint leaves the board where it was ({before:?} -> {after:?})"),
+                before.is_some() && before == after,
+            );
         },
     },
     Beat {
@@ -454,6 +477,9 @@ struct CaptureRun {
     next_beat: usize,
     /// A cell later beats work on, carried between them.
     subject: Option<Coord>,
+    /// Where the board sat when a beat last noted it down, for checking that
+    /// something which changes the text around it did not move it.
+    anchor: Option<Vec2>,
     /// Every assertion the gesture beats made.
     checks: Vec<(String, bool)>,
 }
@@ -478,6 +504,7 @@ impl Plugin for CapturePlugin {
             elapsed: 0.0,
             next_beat: 0,
             subject: None,
+            anchor: None,
             checks: Vec::new(),
         })
         .add_systems(Update, run_script);
@@ -521,6 +548,7 @@ fn run_script(
         .count();
 
     let mut subject = run.subject;
+    let mut anchor = run.anchor;
     let mut finished = false;
     let mut pointer = Vec::new();
     let mut checks = Vec::new();
@@ -543,6 +571,7 @@ fn run_script(
             cell_centres: &centres,
             visible_marks,
             subject: &mut subject,
+            anchor: &mut anchor,
             pointer: Vec::new(),
             checks: Vec::new(),
             finished: false,
@@ -554,6 +583,7 @@ fn run_script(
     }
 
     run.subject = subject;
+    run.anchor = anchor;
     run.checks.extend(checks);
 
     // Feed the gestures into the same pipeline the mouse uses.

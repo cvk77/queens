@@ -67,9 +67,47 @@ impl Unit {
         }
     }
 
-    /// Human-readable, 1-based: "row 3", "region 5".
-    pub fn label(self) -> String {
-        format!("{} {}", self.family.singular(), self.index + 1)
+    /// Human-readable: "row 3", "the coral region".
+    ///
+    /// Rows and columns are numbered because the player can count them off the
+    /// edge of the board. Nothing on screen numbers a region, so one is named
+    /// by `names` instead.
+    pub fn label(self, names: RegionNames<'_>) -> String {
+        match self.family {
+            Family::Regions => names.label(self.index),
+            _ => format!("{} {}", self.family.singular(), self.index + 1),
+        }
+    }
+}
+
+/// How regions are named in an explanation.
+///
+/// A region is only ever shown as a colour, so "region 4" names nothing the
+/// player can point at; the game passes the colour names of the palette it is
+/// drawing with. Tooling with no palette of its own uses
+/// [`RegionNames::numbered`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RegionNames<'a> {
+    names: &'a [&'a str],
+}
+
+impl<'a> RegionNames<'a> {
+    /// Names region `i` after `names[i]`: "the coral region". An index past the
+    /// end of the list falls back to a number, so a short list is still safe.
+    pub const fn colours(names: &'a [&'a str]) -> Self {
+        Self { names }
+    }
+
+    /// Numbers regions instead: "region 4".
+    pub const fn numbered() -> Self {
+        Self { names: &[] }
+    }
+
+    fn label(self, index: u8) -> String {
+        match self.names.get(usize::from(index)) {
+            Some(name) => format!("the {name} region"),
+            None => format!("region {}", index + 1),
+        }
     }
 }
 
@@ -95,38 +133,44 @@ pub struct Step {
 
 impl Step {
     /// An explanation phrased for the player.
-    pub fn explain(&self) -> String {
+    pub fn explain(&self, names: RegionNames<'_>) -> String {
         match (&self.action, self.subject, self.object) {
             (Action::Place(cell), Some(unit), _) => format!(
                 "{} has only one cell left for its queen: r{}c{}.",
-                capitalise(&unit.label()),
+                capitalise(&unit.label(names)),
                 cell.row + 1,
                 cell.col + 1
             ),
             (Action::Eliminate(_), Some(subject), Some(object)) => match self.rule {
+                // Naming the unit whose queen is accounted for matters: the
+                // conclusion is about the object, not the subject it came from.
                 RuleId::LineConfinement | RuleId::RegionConfinement => format!(
-                    "Every remaining cell of {} lies in {}, so that queen is spoken for and the rest of {} is clear.",
-                    subject.label(),
-                    object.label(),
-                    object.label()
+                    "Every remaining cell of {} lies in {}, so the queen of {} must be one of them and the rest of {} can be crossed off.",
+                    subject.label(names),
+                    object.label(names),
+                    object.label(names),
+                    object.label(names)
                 ),
                 RuleId::SetElimination => format!(
                     "A locked set starting at {} uses up {} entirely.",
-                    subject.label(),
-                    object.label()
+                    subject.label(names),
+                    object.label(names)
                 ),
                 _ => format!(
                     "{} rules out cells in {}.",
-                    capitalise(&subject.label()),
-                    object.label()
+                    capitalise(&subject.label(names)),
+                    object.label(names)
                 ),
             },
             (Action::Eliminate(_), Some(subject), None) => match self.rule {
                 RuleId::CommonElimination => format!(
                     "Wherever the queen of {} goes, these cells are ruled out.",
-                    subject.label()
+                    subject.label(names)
                 ),
-                _ => format!("{} rules these cells out.", capitalise(&subject.label())),
+                _ => format!(
+                    "{} rules these cells out.",
+                    capitalise(&subject.label(names))
+                ),
             },
             _ => self.rule.name().to_string(),
         }
@@ -208,8 +252,10 @@ pub enum HintKind {
     IncorrectCross(Coord),
     /// A queen belongs on this cell.
     Place(Coord),
-    /// This cell can be crossed off.
-    Eliminate(Coord),
+    /// Every one of these cells can be crossed off. A deduction usually clears
+    /// several at once, and showing only one of them makes the sentence
+    /// explaining it look like it is about a single cell.
+    Eliminate(Vec<Coord>),
     /// The board is already solved.
     Complete,
     /// Everything deducible has been deduced and the board is still unfinished,
@@ -228,14 +274,15 @@ pub struct Hint {
 }
 
 impl Hint {
-    /// The cell the UI should draw attention to.
-    pub fn cell(&self) -> Option<Coord> {
-        match self.kind {
-            HintKind::IncorrectQueen(c)
-            | HintKind::IncorrectCross(c)
-            | HintKind::Place(c)
-            | HintKind::Eliminate(c) => Some(c),
-            HintKind::Complete | HintKind::Stuck => None,
+    /// The cells the UI should draw attention to, in board order. Empty when
+    /// there is nothing to point at.
+    pub fn cells(&self) -> &[Coord] {
+        match &self.kind {
+            HintKind::IncorrectQueen(c) | HintKind::IncorrectCross(c) | HintKind::Place(c) => {
+                std::slice::from_ref(c)
+            }
+            HintKind::Eliminate(cells) => cells,
+            HintKind::Complete | HintKind::Stuck => &[],
         }
     }
 
@@ -261,7 +308,10 @@ impl Hint {
 /// them sits on a solution cell; that also guarantees every constraint keeps at
 /// least one candidate, so seeding the grid this way cannot manufacture a
 /// contradiction.
-pub fn next_hint(puzzle: &Puzzle, state: &BoardState) -> Hint {
+///
+/// `names` decides how a region is referred to: pass the colours the board is
+/// actually drawn in, or [`RegionNames::numbered`] where there are none.
+pub fn next_hint(puzzle: &Puzzle, state: &BoardState, names: RegionNames<'_>) -> Hint {
     if let Some(wrong) = state.queens().find(|&c| !puzzle.is_solution_cell(c)) {
         return Hint {
             kind: HintKind::IncorrectQueen(wrong),
@@ -317,7 +367,7 @@ pub fn next_hint(puzzle: &Puzzle, state: &BoardState) -> Hint {
         }
         if let Some(queen) = state.queens().find(|&q| grid.rules_out(q, cell)) {
             return Hint {
-                kind: HintKind::Eliminate(cell),
+                kind: HintKind::Eliminate(vec![cell]),
                 rule: Some(RuleId::Propagate),
                 message: format!(
                     "The queen at r{}c{} already rules out r{}c{}.",
@@ -332,10 +382,10 @@ pub fn next_hint(puzzle: &Puzzle, state: &BoardState) -> Hint {
 
     match next_step(&grid, true) {
         Some(step) => {
-            let message = step.explain();
+            let message = step.explain(names);
             let kind = match &step.action {
                 Action::Place(cell) => HintKind::Place(*cell),
-                Action::Eliminate(cells) => HintKind::Eliminate(cells[0]),
+                Action::Eliminate(cells) => HintKind::Eliminate(cells.clone()),
             };
             Hint {
                 kind,
@@ -1018,6 +1068,58 @@ mod tests {
     }
 
     #[test]
+    fn a_region_is_named_by_its_colour_when_one_is_supplied() {
+        let names = RegionNames::colours(&["coral", "amber"]);
+        assert_eq!(Unit::region(0).label(names), "the coral region");
+        assert_eq!(Unit::region(1).label(names), "the amber region");
+        // Past the end of the list, and with no list at all.
+        assert_eq!(Unit::region(4).label(names), "region 5");
+        assert_eq!(Unit::region(4).label(RegionNames::numbered()), "region 5");
+        // Rows and columns are countable off the edge of the board either way.
+        assert_eq!(Unit::row(2).label(names), "row 3");
+        assert_eq!(Unit::column(7).label(names), "column 8");
+    }
+
+    /// The confinement sentence has to describe the deduction that was actually
+    /// made: every candidate of the *subject* inside one *object*.
+    #[test]
+    fn a_confinement_hint_describes_the_cells_it_is_about() {
+        use crate::generator::generate;
+        use crate::seed::PuzzleSeed;
+
+        let puzzle = generate(PuzzleSeed::new(8, Difficulty::Hard, 74_763_209));
+        let names = RegionNames::colours(&[
+            "coral", "amber", "lime", "teal", "sky", "lilac", "pink", "sand",
+        ]);
+        let hint = next_hint(&puzzle, &BoardState::new(puzzle.size()), names);
+
+        let HintKind::Eliminate(cells) = &hint.kind else {
+            panic!("expected an elimination, got {hint:?}");
+        };
+        assert_eq!(hint.rule, Some(RuleId::LineConfinement));
+        assert!(
+            hint.message
+                .starts_with("Every remaining cell of the teal region lies in column 8,"),
+            "{}",
+            hint.message
+        );
+
+        // The claim in that sentence: the whole of the named region sits in the
+        // named column, and every cell offered up is elsewhere in that column.
+        let region = puzzle
+            .cells()
+            .filter(|&c| puzzle.region_at(c) == 3)
+            .collect::<Vec<_>>();
+        assert!(region.iter().all(|c| c.col == 7), "{region:?}");
+        assert!(
+            cells
+                .iter()
+                .all(|c| c.col == 7 && puzzle.region_at(*c) != 3)
+        );
+        assert!(cells.len() > 1, "a confinement clears more than one cell");
+    }
+
+    #[test]
     fn hint_flags_a_queen_that_is_not_in_the_solution() {
         let puzzle = puzzle_from_ascii(&["AABBB", "AABBB", "CCCDD", "CCEDD", "CCEED"]);
         let mut state = BoardState::new(puzzle.size());
@@ -1026,7 +1128,7 @@ mod tests {
             .find(|&c| !puzzle.is_solution_cell(c))
             .unwrap();
         state.set(wrong, Mark::Queen);
-        let hint = next_hint(&puzzle, &state);
+        let hint = next_hint(&puzzle, &state, RegionNames::numbered());
         assert_eq!(hint.kind, HintKind::IncorrectQueen(wrong));
     }
 
@@ -1037,7 +1139,10 @@ mod tests {
         for cell in puzzle.solution_cells() {
             state.set(cell, Mark::Queen);
         }
-        assert_eq!(next_hint(&puzzle, &state).kind, HintKind::Complete);
+        assert_eq!(
+            next_hint(&puzzle, &state, RegionNames::numbered()).kind,
+            HintKind::Complete
+        );
     }
 
     #[test]
@@ -1047,9 +1152,11 @@ mod tests {
         let queen = puzzle.solution_cells().next().unwrap();
         state.set(queen, Mark::Queen);
 
-        let hint = next_hint(&puzzle, &state);
+        let hint = next_hint(&puzzle, &state, RegionNames::numbered());
         assert_eq!(hint.rule, Some(RuleId::Propagate));
-        let cell = hint.cell().expect("propagation hints name a cell");
+        let &[cell] = hint.cells() else {
+            panic!("a propagation hint names one cell");
+        };
         assert!(
             queen.row == cell.row
                 || queen.col == cell.col
@@ -1067,25 +1174,35 @@ mod tests {
         use crate::seed::PuzzleSeed;
 
         let puzzle = generate(PuzzleSeed::new(8, Difficulty::Medium, 4321));
-        let opening = next_hint(&puzzle, &BoardState::new(puzzle.size()));
+        let opening = next_hint(
+            &puzzle,
+            &BoardState::new(puzzle.size()),
+            RegionNames::numbered(),
+        );
 
         // Take the opening hint, then take it again and again, applying each
         // one. A hint that ignored the board would hand back the same cell for
         // ever; one that reads the board keeps finding new ground.
         let mut state = BoardState::new(puzzle.size());
-        let mut seen = Vec::new();
+        let mut seen: Vec<Coord> = Vec::new();
         for _ in 0..6 {
-            let hint = next_hint(&puzzle, &state);
-            let Some(cell) = hint.cell() else { break };
+            let hint = next_hint(&puzzle, &state, RegionNames::numbered());
+            let Some(&first) = hint.cells().first() else {
+                break;
+            };
             assert!(
-                !seen.contains(&cell),
-                "hint repeated {cell:?} after it was already acted on: {}",
+                !seen.contains(&first),
+                "hint repeated {first:?} after it was already acted on: {}",
                 hint.message
             );
-            seen.push(cell);
-            match hint.kind {
-                HintKind::Place(cell) => state.set(cell, Mark::Queen),
-                HintKind::Eliminate(cell) => state.set(cell, Mark::Cross),
+            seen.push(first);
+            match &hint.kind {
+                HintKind::Place(cell) => state.set(*cell, Mark::Queen),
+                HintKind::Eliminate(cells) => {
+                    for &cell in cells {
+                        state.set(cell, Mark::Cross);
+                    }
+                }
                 _ => panic!("unexpected hint on a correct board: {hint:?}"),
             }
         }
@@ -1093,10 +1210,10 @@ mod tests {
 
         // And the very first suggestion is no longer what it says once that
         // work is done.
-        let later = next_hint(&puzzle, &state);
+        let later = next_hint(&puzzle, &state, RegionNames::numbered());
         assert_ne!(
-            later.cell(),
-            opening.cell(),
+            later.cells(),
+            opening.cells(),
             "the hint is still answering the empty board"
         );
     }
@@ -1108,7 +1225,7 @@ mod tests {
         let needed = puzzle.solution_cells().next().unwrap();
         state.set(needed, Mark::Cross);
 
-        let hint = next_hint(&puzzle, &state);
+        let hint = next_hint(&puzzle, &state, RegionNames::numbered());
         assert_eq!(hint.kind, HintKind::IncorrectCross(needed));
         assert!(hint.is_correction());
     }
@@ -1130,7 +1247,7 @@ mod tests {
             }
         }
 
-        let hint = next_hint(&puzzle, &state);
+        let hint = next_hint(&puzzle, &state, RegionNames::numbered());
         match hint.kind {
             // With everything else ruled out, the only move left is to place.
             HintKind::Place(cell) => assert!(puzzle.is_solution_cell(cell)),
@@ -1154,10 +1271,12 @@ mod tests {
             }
         }
 
-        let hint = next_hint(&puzzle, &state);
-        match hint.kind {
-            HintKind::Place(cell) => assert!(puzzle.is_solution_cell(cell)),
-            HintKind::Eliminate(cell) => assert!(!puzzle.is_solution_cell(cell)),
+        let hint = next_hint(&puzzle, &state, RegionNames::numbered());
+        match &hint.kind {
+            HintKind::Place(cell) => assert!(puzzle.is_solution_cell(*cell)),
+            HintKind::Eliminate(cells) => {
+                assert!(cells.iter().all(|&c| !puzzle.is_solution_cell(c)));
+            }
             HintKind::Complete | HintKind::Stuck => {}
             HintKind::IncorrectQueen(_) => panic!("the queen placed was correct"),
             // The crosses came from the solver's own propagation, so none of

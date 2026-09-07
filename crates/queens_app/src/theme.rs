@@ -1,6 +1,7 @@
 //! Colours and the shared UI vocabulary every screen is built from.
 
 use bevy::prelude::*;
+use queens_core::RegionNames;
 
 // --- palette ---------------------------------------------------------------
 
@@ -77,6 +78,41 @@ const REGIONS_COLOURBLIND: [Color; 12] = [
     rgb(0x7A7A7A),
 ];
 
+/// What to call each colour in [`REGIONS`], so a hint can say "the coral
+/// region" instead of a number the board never shows. Index for index with the
+/// palette; keep the two in step.
+const REGION_NAMES: [&str; 12] = [
+    "coral",
+    "amber",
+    "lime",
+    "teal",
+    "sky",
+    "lilac",
+    "pink",
+    "sand",
+    "sage",
+    "orchid",
+    "periwinkle",
+    "khaki",
+];
+
+/// The same for [`REGIONS_COLOURBLIND`], whose colours are different enough
+/// that the names have to be too.
+const REGION_NAMES_COLOURBLIND: [&str; 12] = [
+    "orange",
+    "sky",
+    "green",
+    "yellow",
+    "blue",
+    "red",
+    "purple",
+    "silver",
+    "pale blue",
+    "mint",
+    "peach",
+    "grey",
+];
+
 /// The colour of a region. Wraps if a board ever exceeds the palette, though
 /// `MAX_SIZE` keeps that from happening.
 pub fn region_colour(region: u8, colourblind: bool) -> Color {
@@ -86,6 +122,15 @@ pub fn region_colour(region: u8, colourblind: bool) -> Color {
         &REGIONS
     };
     palette[usize::from(region) % palette.len()]
+}
+
+/// The names matching whichever palette is in use, for hint text.
+pub fn region_names(colourblind: bool) -> RegionNames<'static> {
+    RegionNames::colours(if colourblind {
+        &REGION_NAMES_COLOURBLIND
+    } else {
+        &REGION_NAMES
+    })
 }
 
 // --- building blocks -------------------------------------------------------
@@ -278,5 +323,32 @@ pub fn format_time(seconds: f32) -> String {
         format!("{}:{:02}:{:02}", minutes / 60, minutes % 60, seconds)
     } else {
         format!("{minutes}:{seconds:02}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A hint names a region by its colour, so every colour a board can use
+    /// must have a name, and no two may share one.
+    #[test]
+    fn every_region_colour_has_a_distinct_name() {
+        for names in [REGION_NAMES, REGION_NAMES_COLOURBLIND] {
+            assert_eq!(names.len(), REGIONS.len());
+            let mut seen: Vec<&str> = Vec::new();
+            for name in names {
+                assert!(!seen.contains(&name), "{name} is used twice");
+                seen.push(name);
+            }
+        }
+    }
+
+    /// The built-in font is an ASCII subset; anything else renders as tofu.
+    #[test]
+    fn region_names_are_plain_ascii() {
+        for name in REGION_NAMES.iter().chain(&REGION_NAMES_COLOURBLIND) {
+            assert!(name.is_ascii(), "{name}");
+        }
     }
 }

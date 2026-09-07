@@ -48,6 +48,12 @@ actually looking at: your crosses are taken as read and the hint carries on from
 there. If a queen or a cross of yours contradicts the solution, the hint says so
 instead, because nothing sound can be deduced past a false premise.
 
+A hint names what it is talking about the way the board shows it: rows and
+columns by the numbers running alongside the grid, a region by its colour. Every
+cell the step applies to is outlined, not just the first. The line it is written
+on keeps its height whether it holds a hint or the puzzle's rating, so nothing
+moves under you when you ask.
+
 **Pausing** hides every queen and cross. The clock stops, so the board stops
 being readable too.
 

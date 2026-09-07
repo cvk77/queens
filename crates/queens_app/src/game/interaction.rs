@@ -196,6 +196,7 @@ pub fn keyboard_shortcuts(
     play_state: Res<State<PlayState>>,
     mut next_play: ResMut<NextState<PlayState>>,
     mut session: ResMut<Session>,
+    save: Res<SaveData>,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
         match play_state.get() {
@@ -222,7 +223,7 @@ pub fn keyboard_shortcuts(
     } else if control && keys.just_pressed(KeyCode::KeyY) {
         session.redo();
     } else if keys.just_pressed(KeyCode::KeyH) {
-        session.request_hint();
+        session.request_hint(crate::theme::region_names(save.settings.colourblind));
     } else if keys.just_pressed(KeyCode::KeyR) && control {
         session.reset();
     }

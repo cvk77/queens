@@ -11,7 +11,7 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 69 tests + 1 doctest
+cargo test --workspace                      # 73 tests + 1 doctest
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p queens_app                     # play
@@ -75,6 +75,7 @@ are confirmed against the vendored source in `~/.cargo/registry`.
 | A duplicate component in one bundle | **Panics at spawn.** This is why `accent_button` exists rather than passing a second `ButtonTint` |
 | `AppExit` | A `Message`, not an `Event`: `MessageWriter<AppExit>` and `.write()` |
 | `TextFont` | `font: FontSource`, `font_size: FontSize::Px(..)` |
+| `LineHeight` | Its **own component**, not a `TextFont` field, and not in the prelude: `bevy::text::LineHeight`. Defaults to `RelativeToFont(1.2)` |
 | `Resource` | A subtrait of `Component`; you cannot derive both |
 | Observers | `On<Pointer<Click>>`, target via `event.event_target()` |
 | State scoping | `DespawnOnExit(state)`, not `StateScoped` |
