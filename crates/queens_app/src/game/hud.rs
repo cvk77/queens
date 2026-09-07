@@ -20,6 +20,22 @@ pub(super) struct QueensLabel;
 #[derive(Component)]
 pub(super) struct MessageLabel;
 
+/// Acknowledges a copied seed, then clears itself.
+#[derive(Component, Default)]
+pub(super) struct SeedCopied {
+    /// Counts down while the acknowledgement is up; `None` at rest.
+    showing: Option<Timer>,
+}
+
+/// How long the acknowledgement stays up. Long enough to read, short enough
+/// that it is gone before it becomes furniture.
+const COPIED_SECONDS: f32 = 1.5;
+/// Room set aside for the acknowledgement, wide enough for the longest word it
+/// shows. Reserved up front rather than claimed on the click, and mirrored on
+/// the other side of the bar, so a copy neither shifts the bar nor pulls it off
+/// centre.
+const COPIED_WIDTH_PX: f32 = 70.0;
+
 /// The commentary under the board.
 const MESSAGE_FONT_PX: f32 = 16.0;
 /// Pinned rather than left to the font's default so the reserved height below
@@ -52,13 +68,20 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
         );
 
         bar.spawn(spacer());
+        // Balances the room reserved for the copy acknowledgement on the far
+        // side, so what the player can see stays centred in the bar.
+        bar.spawn(Node {
+            min_width: Val::Px(COPIED_WIDTH_PX),
+            ..default()
+        });
         bar.spawn(theme::text(
             format!("{size}x{size}   {rating}"),
             19.0,
             theme::TEXT,
         ));
-        // The seed, so a puzzle worth keeping can be written down and typed
-        // back in on the New Game screen.
+        // The seed, so a puzzle worth keeping can be played again. Clicking it
+        // copies the digits: a long seed is easy to mistype and there is a
+        // field on the New Game screen waiting for it.
         bar.spawn((
             theme::text(
                 format!("#{}", session.puzzle.seed().seed),
@@ -70,6 +93,34 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
                 ..default()
             },
             TextLayout::no_wrap(),
+        ))
+        .observe(copy_seed)
+        // Nothing else in the bar is clickable, so the label has to say it is.
+        .observe(
+            |over: On<Pointer<Over>>, mut labels: Query<&mut TextColor>| {
+                if let Ok(mut color) = labels.get_mut(over.event_target()) {
+                    color.0 = theme::TEXT;
+                }
+            },
+        )
+        .observe(|out: On<Pointer<Out>>, mut labels: Query<&mut TextColor>| {
+            if let Ok(mut color) = labels.get_mut(out.event_target()) {
+                color.0 = theme::TEXT_DIM;
+            }
+        });
+
+        // Holds its width while empty, so acknowledging a copy cannot nudge
+        // the rest of the bar sideways.
+        bar.spawn((
+            theme::text("", 15.0, theme::ACCENT),
+            Node {
+                min_width: Val::Px(COPIED_WIDTH_PX),
+                // Keeps the word off the seed it belongs to.
+                padding: UiRect::left(Val::Px(8.0)),
+                ..default()
+            },
+            TextLayout::no_wrap(),
+            SeedCopied::default(),
         ));
         bar.spawn(spacer());
 
@@ -86,6 +137,49 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
             TextLayout::no_wrap(),
         ));
     });
+}
+
+/// Puts the seed on the clipboard.
+///
+/// The digits alone: the leading `#` is decoration, and the seed field on the
+/// New Game screen takes digits.
+fn copy_seed(
+    _click: On<Pointer<Click>>,
+    session: Res<Session>,
+    mut clipboard: ResMut<Clipboard>,
+    mut acknowledgement: Query<(&mut Text, &mut SeedCopied)>,
+) {
+    let seed = session.puzzle.seed().seed;
+    let said = match clipboard.set_text(seed.to_string()) {
+        Ok(()) => "copied",
+        Err(error) => {
+            // A desktop without a clipboard, or one that refused it, is not
+            // worth a crash over a convenience.
+            warn!("could not copy the seed: {error}");
+            "failed"
+        }
+    };
+
+    for (mut text, mut state) in &mut acknowledgement {
+        text.0 = said.to_string();
+        state.showing = Some(Timer::from_seconds(COPIED_SECONDS, TimerMode::Once));
+    }
+}
+
+/// Takes the copy acknowledgement back down once it has had its moment.
+pub fn clear_seed_acknowledgement(
+    time: Res<Time>,
+    mut labels: Query<(&mut Text, &mut SeedCopied)>,
+) {
+    for (mut text, mut state) in &mut labels {
+        let Some(timer) = state.showing.as_mut() else {
+            continue;
+        };
+        if timer.tick(time.delta()).just_finished() {
+            text.0.clear();
+            state.showing = None;
+        }
+    }
 }
 
 /// The toolbar below the board, plus the running commentary.

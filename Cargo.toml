@@ -9,7 +9,9 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 queens_core = { path = "crates/queens_core" }
-bevy = "0.19.1"
+# `system_clipboard` is off by default, and without it `Clipboard` writes to an
+# in-process buffer the rest of the desktop never sees.
+bevy = { version = "0.19.1", features = ["system_clipboard"] }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 dirs = "7"

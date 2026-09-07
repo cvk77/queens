@@ -92,9 +92,9 @@ holds at least two cells — a one-cell region places its own queen for nothing.
 ## Seeds
 
 Every puzzle is reproducible from an eight-digit seed, shown in the top bar
-during play and on the victory panel. Type it into the **Seed** box on the New
-Game screen to play that exact board again, or leave the box blank for something
-new.
+during play and on the victory panel. Click the one in the top bar to copy it.
+Type it into the **Seed** box on the New Game screen to play that exact board
+again, or leave the box blank for something new.
 
 Saved games store only the seed, so the resume slot is a few bytes and the board
 is rebuilt on load.

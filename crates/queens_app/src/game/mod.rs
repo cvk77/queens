@@ -29,6 +29,7 @@ impl Plugin for GamePlugin {
                 (
                     board::refresh_board,
                     hud::refresh_hud,
+                    hud::clear_seed_acknowledgement,
                     interaction::keyboard_shortcuts,
                     autosave,
                 )

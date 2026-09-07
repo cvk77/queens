@@ -11,7 +11,7 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 83 tests + 1 doctest
+cargo test --workspace                      # 86 tests + 1 doctest
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p queens_app                     # play
@@ -87,6 +87,7 @@ are confirmed against the vendored source in `~/.cargo/registry`.
 | Run conditions | `.and_then(..)`; plain `.and(..)` is deprecated |
 | `DragStart` | Fires on the **first pixel** of movement — no distance threshold |
 | `Click` vs `DragEnd` | On release, `Click` fires **first** |
+| `Click` and `Release` | Go to the entity hovered **the previous frame**, so a press that drifts onto a neighbour before releasing produces **no `Click` at all**, on either entity. `DragEnd` goes to the entity that was pressed, which makes it the dependable end of a gesture |
 | Hiding a UI node | Use `Node.display`; a `Visibility::Hidden` node still takes layout space |
 
 **The built-in font is an ASCII subset.** No em dashes, middle dots, `♛` or `×`
@@ -119,4 +120,8 @@ drawn from UI nodes for the same reason. Doc comments and Markdown are fine.
 - Easy and Expert at 12×12 are slow to generate (~1–2s median, a tail past 5s).
   Both are inherently scarce. Runs on a background thread with a loading screen.
 - A drag-sweep records one undo step per cell.
-- CI tests on Linux only; the other three platforms are built but not tested.
+- CI runs the tests on all three platforms, but the release build and its
+  packaging only for a `v*` tag or a `workflow_dispatch`, so a packaging
+  mistake surfaces at tag time. Trigger the workflow by hand before tagging.
+- Nothing runs the scripted capture in CI: it needs a window, so screenshots
+  are only ever checked locally.

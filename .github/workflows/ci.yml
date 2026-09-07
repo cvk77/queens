@@ -12,47 +12,14 @@ env:
   # Bevy links a lot; keep incremental artefacts out of the cache.
   CARGO_INCREMENTAL: 0
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never interrupt a tag run: it may be midway through creating the release.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   check:
-    name: Format, lint and test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            pkg-config libx11-dev libasound2-dev libudev-dev \
-            libxkbcommon-dev libwayland-dev
-
-      - uses: Swatinem/rust-cache@v2
-
-      - run: cargo fmt --all --check
-
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-
-      # Covers queens_core's logic and the app's unit tests. Neither needs a
-      # window, so this runs on a headless runner unchanged.
-      - run: cargo test --workspace
-
-  generator:
-    name: Audit generated puzzles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-
-      # Every puzzle is checked for a unique solution, contiguous regions, a
-      # stable rating and byte-identical regeneration from its seed. queens_cli
-      # has no Bevy dependency, so this needs no system libraries and is quick.
-      - name: Generate and audit a spread of puzzles
-        run: >
-          cargo run --release -p queens_cli --
-          bench --sizes 5-10 --difficulties all --count 5
-
-  build:
-    name: Build ${{ matrix.name }}
+    name: Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -60,13 +27,86 @@ jobs:
         include:
           - name: linux-x86_64
             os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
           - name: windows-x86_64
             os: windows-latest
-            target: x86_64-pc-windows-msvc
           - name: macos-aarch64
             os: macos-latest
-            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # First, and before anything is installed or restored: formatting needs
+      # nothing but the toolchain, so a formatting failure should cost seconds.
+      - name: Check formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev \
+            libxkbcommon-dev libwayland-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
+          # clippy runs with -D warnings; without this a single warning throws
+          # away the whole Bevy dependency build along with it.
+          cache-on-failure: true
+
+      # One authority on lint is enough: the same warnings fire on every
+      # platform, and running it three times only spends runner minutes.
+      - name: Lint
+        if: runner.os == 'Linux'
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # Covers queens_core's logic and the app's unit tests. Neither needs a
+      # window, so this runs on a headless runner unchanged.
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The tests build every library and test target but link neither binary.
+      # Once they are built this is only the link step, and it is the only
+      # thing that catches a missing native library on this platform.
+      - name: Build the binaries
+        run: cargo build --workspace --locked
+
+  generator:
+    name: Audit generated puzzles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # Every puzzle is checked for a unique solution, contiguous regions, a
+      # stable rating and byte-identical regeneration from its seed. queens_cli
+      # has no Bevy dependency, so this needs no system libraries and is quick.
+      - name: Generate and audit a spread of puzzles
+        run: >
+          cargo run --release --locked -p queens_cli --
+          bench --sizes 5-10 --difficulties all --count 5
+
+  build:
+    name: Build ${{ matrix.name }}
+    # Release binaries are only ever consumed by a release. Building them on
+    # every push costs three runners a full LTO compile for artefacts nobody
+    # downloads; the manual trigger is there to produce one on demand.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+          - name: windows-x86_64
+            os: windows-latest
+          - name: macos-aarch64
+            os: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -79,28 +119,26 @@ jobs:
             pkg-config libx11-dev libasound2-dev libudev-dev \
             libxkbcommon-dev libwayland-dev
 
-      - name: Add the target
-        run: rustup target add ${{ matrix.target }}
-
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: release-${{ matrix.os }}
 
+      # Each runner builds for its own host, so no target flag: it would only
+      # bury the binaries a directory deeper for nothing.
       - name: Build the game and the generator tool
-        run: cargo build --release --workspace --target ${{ matrix.target }}
+        run: cargo build --release --workspace --locked
 
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |
           tar -czf "queens-${{ matrix.name }}.tar.gz" \
-            -C "target/${{ matrix.target }}/release" queens queens-gen
+            -C target/release queens queens-gen
 
       - name: Package (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $release = "target/${{ matrix.target }}/release"
-          $binaries = "$release/queens.exe", "$release/queens-gen.exe"
+          $binaries = "target/release/queens.exe", "target/release/queens-gen.exe"
           Compress-Archive -Path $binaries -DestinationPath "queens-${{ matrix.name }}.zip"
 
       - uses: actions/upload-artifact@v4

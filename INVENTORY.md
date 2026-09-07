@@ -86,8 +86,8 @@ regeneration from its seed.
 | `menu.rs` | 599 | Main menu (with the version and copyright line), New Game (size, difficulty, seed entry), Statistics, Settings; `SeedInput` |
 | `game/mod.rs` | 227 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
 | `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
-| `game/hud.rs` | 305 | Top bar (size, difficulty, seed, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
-| `game/interaction.rs` | 344 | `PaintStroke`, the click/drag observers, keyboard shortcuts |
+| `game/hud.rs` | 399 | Top bar (size, difficulty, seed-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
+| `game/interaction.rs` | 495 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts |
 | `capture.rs` | 650 | The scripted run: screenshots every screen and asserts real pointer gestures |
 
 ### How a game starts
@@ -124,7 +124,7 @@ automatic.
 | `queens_core/src/solver.rs` | 6 | Counting, caps, agreement with brute force |
 | `queens_core/src/board.rs` | 5 | Geometry, adjacency, mark cycle |
 | `queens_core/src/rng.rs` | 5 | Reproducibility, uniformity, shuffle |
-| `queens_app/src/game/interaction.rs` | 7 | The gesture state machine |
+| `queens_app/src/game/interaction.rs` | 10 | The gesture state machine, including a tap that drifts off its cell |
 | `queens_app/src/session.rs` | 8 | Queen removal taking its auto-crosses, undo, when a hint counts |
 | `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
 | `queens_app/src/menu.rs` | 5 | Seed field parsing and its digit cap, the copyright line staying ASCII |
