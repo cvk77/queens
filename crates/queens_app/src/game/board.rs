@@ -1,5 +1,5 @@
-//! Drawing the board: a CSS grid of cell entities, and keeping them in step
-//! with the session.
+//! Drawing the board: a `Display::Grid` of cell entities, and keeping them in
+//! step with the session.
 
 use bevy::prelude::*;
 use queens_core::{ALL_SIDES, Coord, HintKind, Mark, Puzzle, Side};
@@ -40,8 +40,9 @@ pub(crate) struct CrossMark;
 /// Builds the board — the ruler of row and column numbers, the grid, and every
 /// cell inside it — as a child of `parent`.
 ///
-/// The whole thing is one CSS grid so the rulers cannot drift out of step with
-/// the cells: `auto` tracks take their size from the board node itself.
+/// The whole thing is one `Display::Grid` so the rulers cannot drift out of
+/// step with the cells: `auto` tracks take their size from the board node
+/// itself.
 pub fn spawn_grid(parent: &mut ChildSpawnerCommands, session: &Session, save: &SaveData) {
     let puzzle = &session.puzzle;
     let size = puzzle.size();

@@ -78,7 +78,7 @@ pub enum Side {
     Left,
 }
 
-/// Every side, in CSS order.
+/// Every side, clockwise from top.
 pub const ALL_SIDES: [Side; 4] = [Side::Top, Side::Right, Side::Bottom, Side::Left];
 
 impl Side {

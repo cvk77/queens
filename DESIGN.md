@@ -194,9 +194,9 @@ both keep working.
 
 ## Rendering
 
-The board is a CSS grid of `Node` entities — one per cell — rather than sprites.
-Bevy UI gives layout, scaling to any board size and hit-testing for free, and the
-menus share the same vocabulary.
+The board is a `Display::Grid` of `Node` entities — one per cell — rather than
+sprites. Bevy UI gives layout, scaling to any board size and hit-testing for
+free, and the menus share the same vocabulary.
 
 Region boundaries come from per-side border widths. Each cell draws a heavy
 border on any edge whose neighbour belongs to a different region and a hairline
