@@ -1,0 +1,22 @@
+[package]
+name = "queens_app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The Queens puzzle game"
+
+[[bin]]
+name = "queens"
+path = "src/main.rs"
+
+[features]
+# Links Bevy dynamically for much faster incremental rebuilds during
+# development: `cargo run -p queens_app --features dev`.
+dev = ["bevy/dynamic_linking"]
+
+[dependencies]
+queens_core = { workspace = true }
+bevy = { workspace = true }
+serde = { workspace = true }
+ron = { workspace = true }
+dirs = { workspace = true }

@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Bevy links a lot; keep incremental artefacts out of the cache.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  check:
+    name: Format, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev \
+            libxkbcommon-dev libwayland-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo fmt --all --check
+
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # Covers queens_core's logic and the app's unit tests. Neither needs a
+      # window, so this runs on a headless runner unchanged.
+      - run: cargo test --workspace
+
+  generator:
+    name: Audit generated puzzles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+
+      # Every puzzle is checked for a unique solution, contiguous regions, a
+      # stable rating and byte-identical regeneration from its seed. queens_cli
+      # has no Bevy dependency, so this needs no system libraries and is quick.
+      - name: Generate and audit a spread of puzzles
+        run: >
+          cargo run --release -p queens_cli --
+          bench --sizes 5-10 --difficulties all --count 5
+
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - name: macos-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            pkg-config libx11-dev libasound2-dev libudev-dev \
+            libxkbcommon-dev libwayland-dev
+
+      - name: Add the target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build the game and the generator tool
+        run: cargo build --release --workspace --target ${{ matrix.target }}
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        run: |
+          tar -czf "queens-${{ matrix.name }}.tar.gz" \
+            -C "target/${{ matrix.target }}/release" queens queens-gen
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $release = "target/${{ matrix.target }}/release"
+          $binaries = "$release/queens.exe", "$release/queens-gen.exe"
+          Compress-Archive -Path $binaries -DestinationPath "queens-${{ matrix.name }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: queens-${{ matrix.name }}
+          path: queens-${{ matrix.name }}.*
+          if-no-files-found: error
+
+  release:
+    name: Publish a release
+    # Only for a pushed version tag, and only once the binaries and the checks
+    # are known good.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, generator, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Attach the binaries to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}"
+          --repo "${{ github.repository }}"
+          --title "${{ github.ref_name }}"
+          --generate-notes
+          artifacts/*

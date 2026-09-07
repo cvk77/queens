@@ -1,0 +1,13 @@
+[package]
+name = "queens_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless generation, rating and benchmarking tool for queens_core"
+
+[[bin]]
+name = "queens-gen"
+path = "src/main.rs"
+
+[dependencies]
+queens_core = { workspace = true }

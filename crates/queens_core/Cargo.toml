@@ -1,0 +1,9 @@
+[package]
+name = "queens_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Board model, puzzle generator and solvers for the Queens puzzle game"
+
+[dependencies]
+serde = { workspace = true }

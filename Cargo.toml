@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = ["crates/queens_core", "crates/queens_cli", "crates/queens_app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+queens_core = { path = "crates/queens_core" }
+bevy = "0.19.1"
+serde = { version = "1", features = ["derive"] }
+ron = "0.12"
+dirs = "7"
+
+# Bevy is unusably slow in an unoptimised debug build; optimise dependencies
+# hard while keeping our own crates quick to compile.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
