@@ -128,6 +128,51 @@ jobs:
       - name: Build the game and the generator tool
         run: cargo build --release --workspace --locked
 
+      # A throwaway keychain that dies with the runner, so the certificate
+      # only ever lives in this job's own VM.
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "actions" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "actions" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import "$RUNNER_TEMP/certificate.p12" -k build.keychain \
+            -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "actions" build.keychain
+          security list-keychains -d user -s build.keychain \
+            $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+
+      # `queens.app` in a DMG, notarized: the game is a GUI app someone
+      # double-clicks after downloading, which is exactly what Gatekeeper's
+      # quarantine check is strictest about. `queens-gen` stays a CLI tool in
+      # the tar.gz/zip below; that friction doesn't apply to it the same way.
+      - name: Package, sign and notarize the game (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          echo "$APPLE_API_KEY" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
+          VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          packaging/macos/build_dmg.sh \
+            --version "$VERSION" \
+            --binary target/release/queens \
+            --identity "$APPLE_SIGNING_IDENTITY" \
+            --api-key "$RUNNER_TEMP/apple_api_key.p8" \
+            --api-key-id "$APPLE_API_KEY_ID" \
+            --api-issuer "$APPLE_API_ISSUER" \
+            --out "queens-${{ matrix.name }}.dmg"
+          rm "$RUNNER_TEMP/apple_api_key.p8"
+
       - name: Package (unix)
         if: runner.os != 'Windows'
         run: |

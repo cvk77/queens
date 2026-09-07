@@ -123,5 +123,12 @@ drawn from UI nodes for the same reason. Doc comments and Markdown are fine.
 - CI runs the tests on all three platforms, but the release build and its
   packaging only for a `v*` tag or a `workflow_dispatch`, so a packaging
   mistake surfaces at tag time. Trigger the workflow by hand before tagging.
+- The macOS leg signs, notarizes and DMGs `queens.app`
+  (`packaging/macos/build_dmg.sh`) and needs six repo secrets:
+  `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `APPLE_SIGNING_IDENTITY`,
+  `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`. Without them that
+  step fails outright rather than falling back to unsigned; run the script
+  locally with no `--identity`/API key args to ad-hoc sign and skip
+  notarization instead.
 - Nothing runs the scripted capture in CI: it needs a window, so screenshots
   are only ever checked locally.

@@ -148,7 +148,8 @@ cargo test -p queens_core --lib --release -- --ignored --nocapture lumpiness_swe
 | Path | What it is |
 |---|---|
 | `Cargo.toml` | Workspace: members, shared dependencies, dev and release profiles |
-| `.github/workflows/ci.yml` | Checks, the generator audit, a 4-platform binary matrix, tag releases |
+| `.github/workflows/ci.yml` | Checks, the generator audit, a 4-platform binary matrix, tag releases; the macOS leg signs, notarizes and DMGs the game |
+| `packaging/macos/` | `build_dmg.sh` (bundles, codesigns, DMGs and notarizes `queens.app`; ad-hoc-signs and skips notarization when run locally with no credentials), `Info.plist`, `AppIcon.icns` and the `generate_icon.py` that drew it |
 | `README.md` | The game, its rules, how to build and play |
 | `DESIGN.md` | Why the code is shaped this way |
 | `CLAUDE.md` | Conventions, invariants and version-specific traps |
