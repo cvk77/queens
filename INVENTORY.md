@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 23 source files, ~9,100 lines, three crates. Start with
+A map of the codebase: 24 source files, ~9,900 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -23,6 +23,7 @@ the task index, then the per-file notes.
 | Top bar, toolbar, timer, hint line | `queens_app/src/game/hud.rs` |
 | Pause / victory overlays, win detection, autosave | `queens_app/src/game/mod.rs` |
 | Menus, size/difficulty pickers, seed and share code entry | `queens_app/src/menu.rs` |
+| The How to Play screen and its hand-drawn example boards | `queens_app/src/howto.rs` |
 | Save file, settings, statistics | `queens_app/src/persistence.rs` |
 | The loading screen and background generation | `queens_app/src/generation.rs` |
 | Screens and sub-states | `queens_app/src/states.rs` |
@@ -78,17 +79,18 @@ regeneration from its seed.
 | File | Lines | What is in it |
 |---|---|---|
 | `main.rs` | 68 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
-| `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
+| `states.rs` | 51 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings, HowToPlay), `PlayState` sub-state (Active, Paused, Won) and `HowToPlayPage` sub-state (Goal, Touching, Controls, Hints) |
 | `theme.rs` | 523 | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 142 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, pulses the loading dots |
-| `menu.rs` | 1147 | Main menu (with the version and copyright line, pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
+| `menu.rs` | 1156 | Main menu (with the version and copyright line, pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
+| `howto.rs` | 448 | The How to Play screen: four pages (Goal, No Touching, Controls, Hints and Difficulty) paginated by `HowToPlayPage`, each illustrated with a hand-drawn demo board built from `board::queen_token`/`cross_token` rather than a real `Puzzle` |
 | `game/mod.rs` | 270 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
-| `game/board.rs` | 455 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline |
+| `game/board.rs` | 473 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline; `queen_token`/`cross_token` are the always-shown variants `howto.rs` reuses for its example boards |
 | `game/hud.rs` | 401 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
 | `game/interaction.rs` | 495 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts |
-| `capture.rs` | 672 | The scripted run: screenshots every screen and asserts real pointer gestures |
+| `capture.rs` | 711 | The scripted run: screenshots every screen (including each How to Play page) and asserts real pointer gestures |
 
 ### How a game starts
 

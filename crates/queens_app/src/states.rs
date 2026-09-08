@@ -16,6 +16,23 @@ pub enum AppState {
     Playing,
     Stats,
     Settings,
+    /// The rules, controls and difficulty bands, explained with example
+    /// boards rather than a played one.
+    HowToPlay,
+}
+
+/// Which page of [`AppState::HowToPlay`] is on screen.
+///
+/// A sub-state rather than a field on some resource, so leaving a page tears
+/// its content down the same automatic way every other screen does.
+#[derive(SubStates, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[source(AppState = AppState::HowToPlay)]
+pub enum HowToPlayPage {
+    #[default]
+    Goal,
+    Touching,
+    Controls,
+    Hints,
 }
 
 /// Where a game in progress stands.

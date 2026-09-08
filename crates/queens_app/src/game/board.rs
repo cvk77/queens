@@ -199,11 +199,10 @@ fn spawn_cell(grid: &mut ChildSpawnerCommands, puzzle: &Puzzle, coord: Coord, sa
 /// nodes so the game needs no art assets and no font that happens to carry a
 /// chess glyph. The disc is what keeps the crown legible whichever region
 /// colour the queen lands on.
-fn queen_mark() -> impl Bundle {
+fn queen_shape(display: Display) -> impl Bundle {
     (
-        QueenMark,
         Node {
-            display: Display::None,
+            display,
             width: Val::Percent(68.0),
             height: Val::Percent(68.0),
             border: UiRect::all(Val::Px(2.0)),
@@ -216,6 +215,16 @@ fn queen_mark() -> impl Bundle {
         BorderColor::all(theme::QUEEN_RING),
         children![crown()],
     )
+}
+
+fn queen_mark() -> impl Bundle {
+    (QueenMark, queen_shape(Display::None))
+}
+
+/// The queen, always shown: for an illustrative diagram with no
+/// [`QueenMark`] of its own to toggle, such as the How to Play screen.
+pub(crate) fn queen_token() -> impl Bundle {
+    queen_shape(Display::Flex)
 }
 
 /// Where the band's top edge sits, as a share of the crown's box. Every point
@@ -329,17 +338,26 @@ fn tinted_piece(
 /// The player's cross: two bars laid over each other. Rotating bars rather than
 /// tilting a glyph gives both strokes the same weight and properly rounded
 /// ends, and it scales with the cell without any per-board font sizing.
-fn cross_mark() -> impl Bundle {
+fn cross_shape(display: Display) -> impl Bundle {
     (
-        CrossMark,
         Node {
-            display: Display::None,
+            display,
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
             ..default()
         },
         children![cross_bar(45.0), cross_bar(-45.0)],
     )
+}
+
+fn cross_mark() -> impl Bundle {
+    (CrossMark, cross_shape(Display::None))
+}
+
+/// The cross, always shown: for an illustrative diagram with no [`CrossMark`]
+/// of its own to toggle, such as the How to Play screen.
+pub(crate) fn cross_token() -> impl Bundle {
+    cross_shape(Display::Flex)
 }
 
 /// One stroke of the cross, inset so that it sits centred in the cell.

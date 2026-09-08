@@ -27,6 +27,9 @@ diagonal are perfectly legal as long as they are two or more rows apart.
 Every generated puzzle has **exactly one** solution, and every one can be solved
 by reasoning alone. You never need to guess.
 
+The main menu's **How to Play** screen covers the same ground with example
+boards, if you would rather learn by looking than by reading.
+
 ## Playing
 
 | Input | Effect |
@@ -36,8 +39,12 @@ by reasoning alone. You never need to guess.
 | Left drag | Sweep a run of crosses; drag from a crossed cell to rub them out |
 | `Esc` | Pause and resume |
 | `H` | Hint |
-| `Ctrl+Z` / `Ctrl+Y` | Undo / redo (`Ctrl+Shift+Z` also redoes) |
-| `Ctrl+R` | Clear the board |
+| `Ctrl+Z` / `Ctrl+Y` (`Cmd` on macOS) | Undo / redo (`Ctrl+Shift+Z` also redoes) |
+| `Ctrl+R` (`Cmd+R` on macOS) | Clear the board |
+
+Shortcuts go by the letter a key actually produces, not by where it sits, so
+undo is still the Z key on a keyboard - German QWERTZ included - that puts a
+different letter where a US layout has Z.
 
 Crosses are your own notes — the rules ignore them. Queens that break a rule are
 outlined in red as soon as you place them.

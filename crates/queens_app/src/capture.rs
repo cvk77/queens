@@ -27,7 +27,7 @@ use queens_core::{Coord, Difficulty, Mark, PuzzleSeed};
 
 use crate::persistence::{InProgress, SaveData};
 use crate::session::{PuzzleRequest, Session};
-use crate::states::{AppState, PlayState};
+use crate::states::{AppState, HowToPlayPage, PlayState};
 use crate::theme;
 
 /// The environment variable that turns this on and says where to write.
@@ -44,6 +44,7 @@ pub struct CaptureContext<'a> {
     pub directory: &'a PathBuf,
     pub next_app: &'a mut NextState<AppState>,
     pub next_play: &'a mut NextState<PlayState>,
+    pub next_howto: &'a mut NextState<HowToPlayPage>,
     pub session: Option<&'a mut Session>,
     pub save: &'a mut SaveData,
     /// Screen position of the centre of every board cell, when a board is up.
@@ -455,8 +456,44 @@ const SCRIPT: &[Beat] = &[
             ctx.shoot(commands, "13-sweep");
         },
     },
+    // The How to Play screen is reached from the main menu, not from mid-game,
+    // but there is no need to unwind the board first: setting `AppState`
+    // straight to `HowToPlay` tears the playing screen down the same way
+    // leaving it any other way would.
     Beat {
-        seconds: 19.0,
+        seconds: 18.7,
+        action: |_commands, ctx| ctx.next_app.set(AppState::HowToPlay),
+    },
+    Beat {
+        seconds: 18.85,
+        action: |commands, ctx| ctx.shoot(commands, "14-how-to-play-goal"),
+    },
+    Beat {
+        seconds: 18.95,
+        action: |_commands, ctx| ctx.next_howto.set(HowToPlayPage::Touching),
+    },
+    Beat {
+        seconds: 19.05,
+        action: |commands, ctx| ctx.shoot(commands, "15-how-to-play-touching"),
+    },
+    Beat {
+        seconds: 19.15,
+        action: |_commands, ctx| ctx.next_howto.set(HowToPlayPage::Controls),
+    },
+    Beat {
+        seconds: 19.25,
+        action: |commands, ctx| ctx.shoot(commands, "16-how-to-play-controls"),
+    },
+    Beat {
+        seconds: 19.35,
+        action: |_commands, ctx| ctx.next_howto.set(HowToPlayPage::Hints),
+    },
+    Beat {
+        seconds: 19.45,
+        action: |commands, ctx| ctx.shoot(commands, "17-how-to-play-hints"),
+    },
+    Beat {
+        seconds: 19.85,
         action: |_commands, ctx| ctx.finished = true,
     },
 ];
@@ -556,6 +593,7 @@ fn run_script(
     mut run: ResMut<CaptureRun>,
     mut next_app: ResMut<NextState<AppState>>,
     mut next_play: ResMut<NextState<PlayState>>,
+    mut next_howto: ResMut<NextState<HowToPlayPage>>,
     mut session: Option<ResMut<Session>>,
     mut save: ResMut<SaveData>,
     cells: Query<(&crate::game::board::Cell, &UiGlobalTransform)>,
@@ -602,6 +640,7 @@ fn run_script(
             directory: &directory,
             next_app: &mut next_app,
             next_play: &mut next_play,
+            next_howto: &mut next_howto,
             session: session.as_deref_mut(),
             save: &mut save,
             cell_centres: &centres,

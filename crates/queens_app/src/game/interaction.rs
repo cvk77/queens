@@ -1,5 +1,6 @@
 //! Turning clicks, drags and keys into moves.
 
+use bevy::input::keyboard::Key;
 use bevy::prelude::*;
 use queens_core::{Coord, Mark};
 
@@ -283,9 +284,37 @@ pub fn on_cell_drag_end(
     );
 }
 
+/// The platform's own modifier for undo, redo and clear: Command on macOS,
+/// Control everywhere else, matching what every other application on each
+/// platform already uses.
+#[cfg(target_os = "macos")]
+const MODIFIER: [KeyCode; 2] = [KeyCode::SuperLeft, KeyCode::SuperRight];
+#[cfg(not(target_os = "macos"))]
+const MODIFIER: [KeyCode; 2] = [KeyCode::ControlLeft, KeyCode::ControlRight];
+
+/// Whether `letter` was pressed this frame, going by the character the key
+/// actually produces rather than its physical position.
+///
+/// [`KeyCode`] names a key by where it sits on a US layout, which is wrong for
+/// a letter shortcut on a keyboard that puts a different letter there — a
+/// German QWERTZ keyboard swaps Y and Z, so `KeyCode::KeyZ` is the key labelled
+/// Y and undo fires on the wrong one. The logical [`Key`] is what the layout
+/// says the key means, so this instead asks whether the pressed key produced
+/// `letter` at all.
+fn letter_just_pressed(keys: &ButtonInput<Key>, letter: char) -> bool {
+    keys.get_just_pressed().any(|key| {
+        let Key::Character(text) = key else {
+            return false;
+        };
+        let mut chars = text.chars();
+        matches!((chars.next(), chars.next()), (Some(c), None) if c.eq_ignore_ascii_case(&letter))
+    })
+}
+
 /// Keyboard shortcuts for the toolbar.
 pub fn keyboard_shortcuts(
     keys: Res<ButtonInput<KeyCode>>,
+    letters: Res<ButtonInput<Key>>,
     play_state: Res<State<PlayState>>,
     mut next_play: ResMut<NextState<PlayState>>,
     mut session: ResMut<Session>,
@@ -304,20 +333,20 @@ pub fn keyboard_shortcuts(
         return;
     }
 
-    let control = keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
+    let modifier = keys.any_pressed(MODIFIER);
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
 
-    if control && keys.just_pressed(KeyCode::KeyZ) {
+    if modifier && letter_just_pressed(&letters, 'z') {
         if shift {
             session.redo();
         } else {
             session.undo();
         }
-    } else if control && keys.just_pressed(KeyCode::KeyY) {
+    } else if modifier && letter_just_pressed(&letters, 'y') {
         session.redo();
-    } else if keys.just_pressed(KeyCode::KeyH) {
+    } else if letter_just_pressed(&letters, 'h') {
         session.request_hint(crate::theme::region_names(save.settings.colourblind));
-    } else if keys.just_pressed(KeyCode::KeyR) && control {
+    } else if modifier && letter_just_pressed(&letters, 'r') {
         session.reset();
     }
 }
@@ -491,5 +520,45 @@ mod tests {
         assert!(stroke.extend(a, FAR).is_none());
         assert!(stroke.click());
         assert_eq!(stroke.finish(), None);
+    }
+
+    /// A German keyboard's Y key sits where a US layout's Z does and vice
+    /// versa: `KeyCode::KeyZ` would fire on the wrong one, which is exactly
+    /// the bug this match-by-character approach exists to avoid.
+    #[test]
+    fn a_letter_shortcut_follows_what_the_key_produces_not_where_it_sits() {
+        let mut letters = ButtonInput::<Key>::default();
+        letters.press(Key::Character("y".into()));
+
+        assert!(letter_just_pressed(&letters, 'y'));
+        assert!(!letter_just_pressed(&letters, 'z'));
+    }
+
+    /// Shift held for redo (`Ctrl+Shift+Z`) turns the produced character
+    /// upper case, so the match has to ignore case.
+    #[test]
+    fn a_letter_shortcut_ignores_case() {
+        let mut letters = ButtonInput::<Key>::default();
+        letters.press(Key::Character("Z".into()));
+
+        assert!(letter_just_pressed(&letters, 'z'));
+    }
+
+    #[test]
+    fn a_letter_shortcut_does_not_match_a_different_key() {
+        let mut letters = ButtonInput::<Key>::default();
+        letters.press(Key::Character("a".into()));
+
+        assert!(!letter_just_pressed(&letters, 'z'));
+    }
+
+    /// A modifier or arrow key carries no character at all, and must not be
+    /// mistaken for one.
+    #[test]
+    fn a_non_character_key_never_matches_a_letter() {
+        let mut letters = ButtonInput::<Key>::default();
+        letters.press(Key::Control);
+
+        assert!(!letter_just_pressed(&letters, 'z'));
     }
 }

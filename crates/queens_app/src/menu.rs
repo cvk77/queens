@@ -85,6 +85,9 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
                         .spawn(theme::menu_button("New Game"))
                         .observe(go_to(AppState::NewGame));
                     panel
+                        .spawn(theme::menu_button("How to Play"))
+                        .observe(go_to(AppState::HowToPlay));
+                    panel
                         .spawn(theme::menu_button("Statistics"))
                         .observe(go_to(AppState::Stats));
                     panel

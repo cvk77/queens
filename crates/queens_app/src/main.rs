@@ -12,6 +12,7 @@
 mod capture;
 mod game;
 mod generation;
+mod howto;
 mod menu;
 mod persistence;
 mod session;
@@ -22,7 +23,7 @@ use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
 use core::time::Duration;
 
-use states::{AppState, PlayState};
+use states::{AppState, HowToPlayPage, PlayState};
 
 /// How long a still board goes between redraws.
 ///
@@ -51,6 +52,7 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(theme::BACKGROUND))
         .init_state::<AppState>()
         .add_sub_state::<PlayState>()
+        .add_sub_state::<HowToPlayPage>()
         .add_plugins((
             theme::ThemePlugin,
             capture::CapturePlugin,
@@ -58,6 +60,7 @@ fn main() -> AppExit {
             generation::GenerationPlugin,
             menu::MenuPlugin,
             game::GamePlugin,
+            howto::HowToPlayPlugin,
         ))
         .add_systems(Startup, spawn_camera)
         .run()
