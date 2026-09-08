@@ -29,6 +29,7 @@ use crate::persistence::{InProgress, SaveData};
 use crate::session::{PuzzleRequest, Session};
 use crate::states::{AppState, HowToPlayPage, PlayState};
 use crate::theme;
+use crate::update_check::LatestRelease;
 
 /// The environment variable that turns this on and says where to write.
 const CAPTURE_ENV: &str = "QUEENS_CAPTURE";
@@ -93,6 +94,19 @@ const SCRIPT: &[Beat] = &[
     Beat {
         seconds: 1.5,
         action: |commands, ctx| ctx.shoot(commands, "1-main-menu"),
+    },
+    // Faked directly on the resource, the same way a share code is faked
+    // below: the real GitHub check would have to actually be behind a
+    // release to ever show this, and there is no gesture that triggers it.
+    Beat {
+        seconds: 1.6,
+        action: |commands, _ctx| {
+            commands.insert_resource(LatestRelease(Some("v9.9.9".to_string())));
+        },
+    },
+    Beat {
+        seconds: 1.8,
+        action: |commands, ctx| ctx.shoot(commands, "1b-main-menu-update-available"),
     },
     Beat {
         seconds: 2.0,

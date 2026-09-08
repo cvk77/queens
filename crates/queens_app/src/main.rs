@@ -18,6 +18,7 @@ mod persistence;
 mod session;
 mod states;
 mod theme;
+mod update_check;
 
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
@@ -61,6 +62,7 @@ fn main() -> AppExit {
             menu::MenuPlugin,
             game::GamePlugin,
             howto::HowToPlayPlugin,
+            update_check::UpdateCheckPlugin,
         ))
         .add_systems(Startup, spawn_camera)
         .run()

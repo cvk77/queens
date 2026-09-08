@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 24 source files, ~9,900 lines, three crates. Start with
+A map of the codebase: 25 source files, ~10,200 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -28,6 +28,7 @@ the task index, then the per-file notes.
 | The loading screen and background generation | `queens_app/src/generation.rs` |
 | Screens and sub-states | `queens_app/src/states.rs` |
 | The scripted screenshot / gesture run | `queens_app/src/capture.rs` |
+| The startup check for a newer release | `queens_app/src/update_check.rs` |
 
 ## `queens_core` — the puzzle, with no engine attached
 
@@ -74,23 +75,24 @@ regeneration from its seed.
 
 ## `queens_app` — the game
 
-39 tests.
+49 tests.
 
 | File | Lines | What is in it |
 |---|---|---|
-| `main.rs` | 68 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
+| `main.rs` | 73 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 51 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings, HowToPlay), `PlayState` sub-state (Active, Paused, Won) and `HowToPlayPage` sub-state (Goal, Touching, Controls, Hints) |
 | `theme.rs` | 523 | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 142 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, pulses the loading dots |
-| `menu.rs` | 1156 | Main menu (with the version and copyright line, pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
+| `menu.rs` | 1209 | Main menu (with the version and copyright line, and an update notice above it when one is available, all pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
 | `howto.rs` | 448 | The How to Play screen: four pages (Goal, No Touching, Controls, Hints and Difficulty) paginated by `HowToPlayPage`, each illustrated with a hand-drawn demo board built from `board::queen_token`/`cross_token` rather than a real `Puzzle` |
 | `game/mod.rs` | 270 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
 | `game/board.rs` | 473 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline; `queen_token`/`cross_token` are the always-shown variants `howto.rs` reuses for its example boards |
 | `game/hud.rs` | 401 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
-| `game/interaction.rs` | 495 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts |
-| `capture.rs` | 711 | The scripted run: screenshots every screen (including each How to Play page) and asserts real pointer gestures |
+| `game/interaction.rs` | 564 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts matched by the character a key produces (`letter_just_pressed`) rather than its physical position, and the platform's own modifier (`MODIFIER`: Command on macOS, Control elsewhere) |
+| `capture.rs` | 725 | The scripted run: screenshots every screen (including each How to Play page and a faked update notice) and asserts real pointer gestures |
+| `update_check.rs` | 138 | `UpdateCheckPlugin`: a once-at-startup, best-effort GitHub check for a newer release, run on `AsyncComputeTaskPool`; `LatestRelease` is `None` unless one is found |
 
 ### How a game starts
 
@@ -130,12 +132,13 @@ automatic.
 | `queens_core/src/rng.rs` | 5 | Reproducibility, uniformity, shuffle |
 | `queens_core/src/rating.rs` | 3 | Difficulty letter round-tripping, case, an unknown letter |
 | `queens_core/src/seed.rs` | 7 | Share code round-tripping through `Display`/`parse`, and its rejection cases |
-| `queens_app/src/game/interaction.rs` | 10 | The gesture state machine, including a tap that drifts off its cell |
+| `queens_app/src/game/interaction.rs` | 14 | The gesture state machine, including a tap that drifts off its cell; letter shortcuts matching by produced character rather than physical key, case-insensitively, and never on a non-character key |
 | `queens_app/src/session.rs` | 8 | Queen removal taking its auto-crosses, undo, when a hint counts |
 | `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
 | `queens_app/src/menu.rs` | 16 | Seed and share code field parsing, their character caps, focus keeping keystrokes out of the wrong field, settings syncing to a started share code, the copyright line staying ASCII |
 | `queens_app/src/game/hud.rs` | 1 | The wordiest hint fitting the message slot |
 | `queens_app/src/theme.rs` | 2 | Every region colour having a distinct ASCII name |
+| `queens_app/src/update_check.rs` | 6 | Version comparison: patch/minor ordering, equal and older versions, and unparseable or non-triple tags never counting as newer |
 
 Two `#[ignore]` diagnostics in `generator.rs` print measurements rather than
 assert:

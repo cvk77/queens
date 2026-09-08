@@ -7,6 +7,7 @@ use crate::persistence::SaveData;
 use crate::session::PuzzleRequest;
 use crate::states::AppState;
 use crate::theme;
+use crate::update_check::LatestRelease;
 
 pub struct MenuPlugin;
 
@@ -16,6 +17,10 @@ impl Plugin for MenuPlugin {
             .init_resource::<ShareCodeInput>()
             .init_resource::<FocusedField>()
             .add_systems(OnEnter(AppState::MainMenu), spawn_main_menu)
+            .add_systems(
+                Update,
+                refresh_update_notice.run_if(in_state(AppState::MainMenu)),
+            )
             .add_systems(OnEnter(AppState::NewGame), spawn_new_game)
             .add_systems(OnEnter(AppState::Stats), spawn_stats)
             .add_systems(OnEnter(AppState::Settings), spawn_settings)
@@ -47,7 +52,7 @@ fn go_to(state: AppState) -> impl Fn(On<Pointer<Click>>, ResMut<NextState<AppSta
 
 // --- main menu -------------------------------------------------------------
 
-fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
+fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>, latest: Res<LatestRelease>) {
     let resumable = save.in_progress.clone();
 
     commands
@@ -103,8 +108,56 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
                     );
                 });
 
+            screen.spawn(update_notice_line(latest.0.as_deref()));
             screen.spawn(theme::footnote(COPYRIGHT));
         });
+}
+
+/// Marks the text that names a newer release than this build, once
+/// [`crate::update_check::UpdateCheckPlugin`] finds one.
+#[derive(Component)]
+struct UpdateNotice;
+
+/// A quiet line above the copyright line, empty until the update check finds
+/// a newer release. Present and reserved from the start either way, so its
+/// text changing later never shifts the copyright line beneath it.
+fn update_notice_line(newer: Option<&str>) -> impl Bundle {
+    let message = newer
+        .map(|tag| format!("A new version is available: {tag}"))
+        .unwrap_or_default();
+    (
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(theme::GRID * 5.5),
+            width: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        children![(
+            theme::text(message, 13.0, theme::ACCENT),
+            UpdateNotice,
+            TextLayout::no_wrap(),
+        )],
+    )
+}
+
+/// Fills the notice in once the background check finds a newer release,
+/// covering the one case [`spawn_main_menu`] cannot: the check finishing
+/// while the player is already looking at this screen.
+fn refresh_update_notice(
+    latest: Res<LatestRelease>,
+    mut notices: Query<&mut Text, With<UpdateNotice>>,
+) {
+    if !latest.is_changed() {
+        return;
+    }
+    let Some(tag) = &latest.0 else {
+        return;
+    };
+    let message = format!("A new version is available: {tag}");
+    for mut text in &mut notices {
+        text.0 = message.clone();
+    }
 }
 
 /// The build and who owns it, pinned to the bottom of the main menu.

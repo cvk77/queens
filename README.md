@@ -131,6 +131,14 @@ for the puzzle you just finished.
   yourself stay.
 - **Colour-blind palette** swaps in region colours chosen to stay separable.
 
+## Update check
+
+Once per launch, the game asks GitHub for this project's latest release and
+mentions it on the main menu if there is a newer one - nothing is downloaded
+or installed, and a failed or offline check is silently treated as "nothing
+to report". This is the only network access the game ever makes; everything
+else, including saved games, stays on your machine.
+
 ## Building
 
 Needs Rust 1.95 or newer.
