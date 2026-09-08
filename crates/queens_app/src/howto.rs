@@ -155,9 +155,10 @@ fn spawn_touching_page(mut commands: Commands) {
         "No Touching",
         |panel| {
             panel.spawn(theme::subtitle(
-                "Two queens can never touch, not even diagonally - but that is the only \
-                 restriction. Two queens on the same diagonal are perfectly legal as long \
-                 as they are two or more rows apart.",
+                "On top of one queen per row, column and region, there is exactly one \
+                 more rule: two queens can never touch, not even diagonally. That's all \
+                 of it, though - two queens on the same diagonal are perfectly legal as \
+                 long as they are two or more rows apart.",
             ));
             panel
                 .spawn(theme::row(theme::GRID * 5.0))
