@@ -89,10 +89,13 @@ are confirmed against the vendored source in `~/.cargo/registry`.
 | `Click` vs `DragEnd` | On release, `Click` fires **first** |
 | `Click` and `Release` | Go to the entity hovered **the previous frame**, so a press that drifts onto a neighbour before releasing produces **no `Click` at all**, on either entity. `DragEnd` goes to the entity that was pressed, which makes it the dependable end of a gesture |
 | Hiding a UI node | Use `Node.display`; a `Visibility::Hidden` node still takes layout space |
+| A game-wide default font | Overwrite `Assets<Font>` at `AssetId::<Font>::default()` (`theme::ThemePlugin`) rather than threading a `Handle<Font>` through every call that builds a `TextFont` — `FontSource::default()` resolves to that same id |
 
-**The built-in font is an ASCII subset.** No em dashes, middle dots, `♛` or `×`
-in any user-visible string — they render as tofu. The queen and its crown are
-drawn from UI nodes for the same reason. Doc comments and Markdown are fine.
+**No em dashes, middle dots, `♛` or `×` in any user-visible string** — the
+queen and its crown are drawn from UI nodes rather than a glyph, and every
+region name is asserted plain ASCII in `theme.rs`'s tests. Not a font
+limitation any more (the embedded Space Grotesk carries a normal Latin set),
+but a deliberate one: Doc comments and Markdown are fine.
 
 ## Conventions
 

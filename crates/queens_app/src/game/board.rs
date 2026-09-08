@@ -366,10 +366,11 @@ fn cross_bar(degrees: f32) -> impl Bundle {
 /// rather than by toggling `Visibility`: a hidden node still takes up layout
 /// space, which would knock the visible mark off centre.
 pub fn refresh_board(
+    mut commands: Commands,
     session: Res<Session>,
     save: Res<SaveData>,
     play_state: Res<State<PlayState>>,
-    mut cells: Query<(&Cell, &Children, &mut Outline, &mut BackgroundColor)>,
+    mut cells: Query<(Entity, &Cell, &Children, &mut Outline, &mut BackgroundColor)>,
     mut marks: Query<(&mut Node, Has<QueenMark>, Has<CrossMark>)>,
 ) {
     if !session.is_changed() && !save.is_changed() && !play_state.is_changed() {
@@ -393,18 +394,27 @@ pub fn refresh_board(
         _ => theme::ACCENT,
     };
 
-    for (cell, children, mut outline, mut background) in &mut cells {
+    for (entity, cell, children, mut outline, mut background) in &mut cells {
         let mark = session.board.get(cell.coord);
+        // A hint is a "look here, right now" cue and breathes to draw the eye;
+        // a conflict is a standing alert until the player fixes it, so it
+        // stays put rather than competing for attention.
+        let is_hint = !concealed && hint_cells.contains(&cell.coord);
 
         outline.color = if concealed {
             Color::NONE
         } else if session.conflicts.contains(&cell.coord) {
             theme::DANGER
-        } else if hint_cells.contains(&cell.coord) {
+        } else if is_hint {
             hint_colour
         } else {
             Color::NONE
         };
+        if is_hint {
+            commands.entity(entity).insert(HintPulse);
+        } else {
+            commands.entity(entity).remove::<HintPulse>();
+        }
 
         background.0 = theme::region_colour(
             session.puzzle.region_at(cell.coord),
@@ -422,5 +432,24 @@ pub fn refresh_board(
                 node.display = wanted;
             }
         }
+    }
+}
+
+/// Marks a cell whose outline should breathe rather than sit static, because a
+/// hint currently points at it.
+#[derive(Component)]
+pub(crate) struct HintPulse;
+
+/// How fast a hinted cell's outline breathes, in radians per second.
+const HINT_PULSE_RATE: f32 = 3.2;
+
+/// Breathes the alpha of a hinted cell's outline, leaving its hue exactly as
+/// [`refresh_board`] set it: only the alpha channel is touched, computed fresh
+/// from elapsed time every frame, so nothing here can drift.
+pub fn pulse_hint_outlines(time: Res<Time>, mut cells: Query<&mut Outline, With<HintPulse>>) {
+    let alpha = 0.55 + 0.45 * (time.elapsed_secs() * HINT_PULSE_RATE).sin().abs();
+    for mut outline in &mut cells {
+        let colour = outline.color.to_srgba();
+        outline.color = Color::srgba(colour.red, colour.green, colour.blue, alpha);
     }
 }

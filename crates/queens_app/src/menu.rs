@@ -53,18 +53,25 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
     commands
         .spawn(theme::screen(DespawnOnExit(AppState::MainMenu)))
         .with_children(|screen| {
-            screen.spawn(theme::title("QUEENS"));
-            screen.spawn(theme::subtitle(
-                "One queen per row, per column and per colour - and no two may touch.",
-            ));
+            screen.spawn(theme::hero("Queens"));
 
-            screen.spawn(theme::panel()).with_children(|panel| {
-                if let Some(saved) = resumable {
-                    let label = format!(
-                        "Continue - {0}x{0} {1}",
-                        saved.seed.size, saved.seed.difficulty
-                    );
-                    panel.spawn(theme::accent_button(&label)).observe(
+            // Plain column, not `theme::panel()`: four buttons need no card
+            // to read as a group, and a card here would draw a border round
+            // the first thing the player sees.
+            screen
+                .spawn(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: Val::Px(theme::GRID * 2.0),
+                    ..default()
+                })
+                .with_children(|panel| {
+                    if let Some(saved) = resumable {
+                        let label = format!(
+                            "Continue - {0}x{0} {1}",
+                            saved.seed.size, saved.seed.difficulty
+                        );
+                        panel.spawn(theme::accent_button(&label)).observe(
                         move |_click: On<Pointer<Click>>,
                               mut commands: Commands,
                               mut next: ResMut<NextState<AppState>>| {
@@ -72,41 +79,41 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>) {
                             next.set(AppState::Generating);
                         },
                     );
-                }
+                    }
 
-                panel
-                    .spawn(theme::menu_button("New Game"))
-                    .observe(go_to(AppState::NewGame));
-                panel
-                    .spawn(theme::menu_button("Statistics"))
-                    .observe(go_to(AppState::Stats));
-                panel
-                    .spawn(theme::menu_button("Settings"))
-                    .observe(go_to(AppState::Settings));
-                panel.spawn(theme::menu_button("Quit")).observe(
-                    |_click: On<Pointer<Click>>,
-                     save: Res<SaveData>,
-                     mut exit: MessageWriter<AppExit>| {
-                        crate::persistence::flush(&save);
-                        exit.write(AppExit::Success);
-                    },
-                );
-            });
+                    panel
+                        .spawn(theme::menu_button("New Game"))
+                        .observe(go_to(AppState::NewGame));
+                    panel
+                        .spawn(theme::menu_button("Statistics"))
+                        .observe(go_to(AppState::Stats));
+                    panel
+                        .spawn(theme::menu_button("Settings"))
+                        .observe(go_to(AppState::Settings));
+                    panel.spawn(theme::menu_button("Quit")).observe(
+                        |_click: On<Pointer<Click>>,
+                         save: Res<SaveData>,
+                         mut exit: MessageWriter<AppExit>| {
+                            crate::persistence::flush(&save);
+                            exit.write(AppExit::Success);
+                        },
+                    );
+                });
 
             screen.spawn(theme::footnote(COPYRIGHT));
         });
 }
 
-/// The build and who owns it, under the main menu.
+/// The build and who owns it, pinned to the bottom of the main menu.
 ///
 /// The version comes from the workspace manifest, so a beta tester reporting a
-/// bug can read off which build they are on. "(c)" rather than the sign and
-/// "Kruechten" rather than the umlaut: the built-in font is an ASCII subset and
-/// renders anything else as an empty box.
+/// bug can read off which build they are on. The embedded Space Grotesk carries
+/// a normal Latin set, so the copyright sign and the umlaut render as
+/// themselves rather than the ASCII stand-ins the old built-in font needed.
 const COPYRIGHT: &str = concat!(
     "Queens Puzzle ",
     env!("CARGO_PKG_VERSION"),
-    ", (c) 2026 Christoph von Kruechten"
+    ", \u{a9} 2026 Christoph von Kr\u{fc}chten"
 );
 
 // --- new game --------------------------------------------------------------
@@ -148,8 +155,8 @@ fn spawn_new_game(mut commands: Commands) {
             screen.spawn(theme::title("New Game"));
 
             screen.spawn(theme::panel()).with_children(|panel| {
-                panel.spawn(theme::text("Share code", 20.0, theme::TEXT));
-                panel.spawn(theme::row(10.0)).with_children(|row| {
+                panel.spawn(theme::label("Share code"));
+                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
                     row.spawn(share_code_field())
                         .observe(focus_on(FocusedField::ShareCode));
                     row.spawn(theme::small_button("Clear")).observe(
@@ -163,14 +170,17 @@ fn spawn_new_game(mut commands: Commands) {
                         "Paste a share code to replay someone else's puzzle exactly - \
                          it picks the size and difficulty for you.",
                     ),
+                    // Extra room below, on top of the panel's own row gap: the
+                    // share code is a shortcut that bypasses everything below
+                    // it, so it reads better as its own section up top.
                     Node {
-                        margin: UiRect::bottom(Val::Px(10.0)),
+                        margin: UiRect::bottom(Val::Px(theme::GRID * 3.0)),
                         ..default()
                     },
                 ));
 
-                panel.spawn(theme::text("Board size", 20.0, theme::TEXT));
-                panel.spawn(theme::row(8.0)).with_children(|row| {
+                panel.spawn(theme::label("Board size"));
+                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
                     for size in MIN_SIZE..=MAX_SIZE {
                         row.spawn((theme::small_button(&size.to_string()), SizeOption(size)))
                             .observe(
@@ -186,13 +196,13 @@ fn spawn_new_game(mut commands: Commands) {
                 });
 
                 panel.spawn((
-                    theme::text("Difficulty", 20.0, theme::TEXT),
+                    theme::label("Difficulty"),
                     Node {
-                        margin: UiRect::top(Val::Px(12.0)),
+                        margin: UiRect::top(Val::Px(theme::GRID)),
                         ..default()
                     },
                 ));
-                panel.spawn(theme::row(8.0)).with_children(|row| {
+                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
                     for difficulty in ALL_DIFFICULTIES {
                         row.spawn((
                             theme::small_button(difficulty.name()),
@@ -222,13 +232,13 @@ fn spawn_new_game(mut commands: Commands) {
                 ));
 
                 panel.spawn((
-                    theme::text("Seed", 20.0, theme::TEXT),
+                    theme::label("Seed"),
                     Node {
-                        margin: UiRect::top(Val::Px(4.0)),
+                        margin: UiRect::top(Val::Px(theme::GRID * 0.5)),
                         ..default()
                     },
                 ));
-                panel.spawn(theme::row(10.0)).with_children(|row| {
+                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
                     row.spawn(seed_field())
                         .observe(focus_on(FocusedField::Seed));
                     row.spawn((theme::small_button("Clear"), SeedClearButton))
@@ -355,15 +365,13 @@ fn seed_field() -> impl Bundle {
         SeedFieldBox,
         Node {
             width: Val::Px(200.0),
-            padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+            padding: UiRect::axes(Val::Px(theme::GRID * 1.5), Val::Px(theme::GRID)),
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
-            border: UiRect::all(Val::Px(1.0)),
-            border_radius: BorderRadius::all(Val::Px(8.0)),
+            border_radius: BorderRadius::all(Val::Px(theme::GRID)),
             ..default()
         },
         BackgroundColor(theme::BACKGROUND),
-        BorderColor::all(theme::PANEL_EDGE),
         children![(
             theme::text("random", 19.0, theme::TEXT_DIM),
             SeedText,
@@ -433,7 +441,7 @@ fn show_seed_input(
     share: Res<ShareCodeInput>,
     focus: Res<FocusedField>,
     mut fields: Query<(&mut Text, &mut TextColor), With<SeedText>>,
-    mut boxes: Query<&mut BorderColor, With<SeedFieldBox>>,
+    mut boxes: Query<&mut BackgroundColor, With<SeedFieldBox>>,
 ) {
     if !typed.is_changed() && !share.is_changed() && !focus.is_changed() {
         return;
@@ -448,9 +456,9 @@ fn show_seed_input(
             color.0 = if locked { theme::TEXT_DIM } else { theme::TEXT };
         }
     }
-    let border = field_border(*focus == FocusedField::Seed, locked);
-    for mut border_color in &mut boxes {
-        *border_color = BorderColor::all(border);
+    let fill = field_fill(*focus == FocusedField::Seed, locked);
+    for mut background in &mut boxes {
+        *background = BackgroundColor(fill);
     }
 }
 
@@ -517,15 +525,13 @@ fn share_code_field() -> impl Bundle {
         ShareCodeFieldBox,
         Node {
             width: Val::Px(200.0),
-            padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+            padding: UiRect::axes(Val::Px(theme::GRID * 1.5), Val::Px(theme::GRID)),
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
-            border: UiRect::all(Val::Px(1.0)),
-            border_radius: BorderRadius::all(Val::Px(8.0)),
+            border_radius: BorderRadius::all(Val::Px(theme::GRID)),
             ..default()
         },
         BackgroundColor(theme::BACKGROUND),
-        BorderColor::all(theme::PANEL_EDGE),
         children![(
             theme::text("none", 19.0, theme::TEXT_DIM),
             ShareCodeText,
@@ -587,7 +593,7 @@ fn show_share_code_input(
     typed: Res<ShareCodeInput>,
     focus: Res<FocusedField>,
     mut fields: Query<&mut Text, With<ShareCodeText>>,
-    mut boxes: Query<&mut BorderColor, With<ShareCodeFieldBox>>,
+    mut boxes: Query<&mut BackgroundColor, With<ShareCodeFieldBox>>,
 ) {
     if !typed.is_changed() && !focus.is_changed() {
         return;
@@ -600,21 +606,22 @@ fn show_share_code_input(
         };
     }
     // Never locked/disabled itself, unlike the seed field.
-    let border = field_border(*focus == FocusedField::ShareCode, false);
-    for mut border_color in &mut boxes {
-        *border_color = BorderColor::all(border);
+    let fill = field_fill(*focus == FocusedField::ShareCode, false);
+    for mut background in &mut boxes {
+        *background = BackgroundColor(fill);
     }
 }
 
-/// A field's border: dimmed while a share code holds it inert, accented while
-/// it holds the player's keystrokes, and the plain panel edge otherwise.
-fn field_border(focused: bool, locked: bool) -> Color {
+/// A field's fill: dimmed while a share code holds it inert, lit with the
+/// accent while it holds the player's keystrokes, and the plain background
+/// otherwise. A flat fill rather than a focus ring around it.
+fn field_fill(focused: bool, locked: bool) -> Color {
     if locked {
-        theme::PANEL
+        theme::DISABLED
     } else if focused {
-        theme::ACCENT
+        theme::FIELD_FOCUS
     } else {
-        theme::PANEL_EDGE
+        theme::BACKGROUND
     }
 }
 
@@ -639,7 +646,11 @@ fn dim_seed_clear_button(
         return;
     }
     let locked = share.decoded().is_some();
-    let base = if locked { theme::PANEL } else { theme::BUTTON };
+    let base = if locked {
+        theme::DISABLED
+    } else {
+        theme::BUTTON
+    };
     let text_color = if locked { theme::TEXT_DIM } else { theme::TEXT };
     for (mut tint, children) in &mut buttons {
         if tint.base != base {
@@ -718,7 +729,7 @@ fn selected_tint(selected: bool) -> Color {
 fn option_tint(selected: bool, locked: bool) -> Color {
     match (selected, locked) {
         (true, _) => theme::ACCENT,
-        (false, true) => theme::PANEL,
+        (false, true) => theme::DISABLED,
         (false, false) => theme::BUTTON,
     }
 }
@@ -752,15 +763,15 @@ fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
             screen.spawn(theme::title("Statistics"));
 
             screen.spawn(theme::panel()).with_children(|panel| {
-                panel.spawn(stats_row(
-                    ["Difficulty", "Solved", "Best", "Average", "Hints"],
-                    theme::TEXT_DIM,
-                ));
+                panel.spawn(stats_header_row([
+                    "Difficulty",
+                    "Solved",
+                    "Best",
+                    "Average",
+                    "Hints",
+                ]));
                 for row in &rows {
-                    panel.spawn(stats_row(
-                        std::array::from_fn(|i| row[i].as_str()),
-                        theme::TEXT,
-                    ));
+                    panel.spawn(stats_row(std::array::from_fn(|i| row[i].as_str())));
                 }
             });
 
@@ -785,44 +796,71 @@ fn hints_cell(stats: &crate::persistence::DifficultyStats) -> String {
     stats.hints_used.to_string()
 }
 
-/// One line of the statistics table, with fixed column widths so the numbers
-/// line up.
-fn stats_row(cells: [&str; 5], color: Color) -> impl Bundle {
-    /// A fixed box holding the text, rather than sizing the text node itself:
-    /// glyph metrics differ between "0 / 0" and "Easy", and letting those drive
-    /// the box leaves the columns sitting at different heights.
-    fn column(content: &str, width: f32, color: Color) -> impl Bundle {
-        (
-            Node {
-                width: Val::Px(width),
-                height: Val::Px(28.0),
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            children![(
-                theme::text(content.to_string(), 18.0, color),
-                TextLayout::no_wrap(),
-            )],
-        )
-    }
+/// Wide enough for the longest cell each column can hold.
+const STATS_WIDTHS: [f32; 5] = [110.0, 90.0, 90.0, 90.0, 90.0];
 
-    /// Wide enough for the longest cell each column can hold.
-    const WIDTHS: [f32; 5] = [110.0, 90.0, 90.0, 90.0, 90.0];
-
+/// A fixed box holding the text, rather than sizing the text node itself:
+/// glyph metrics differ between "0 / 0" and "Easy", and letting those drive
+/// the box leaves the columns sitting at different heights.
+fn stats_column(content: impl Bundle, width: f32) -> impl Bundle {
     (
         Node {
-            flex_direction: FlexDirection::Row,
+            width: Val::Px(width),
+            height: Val::Px(theme::GRID * 3.5),
             align_items: AlignItems::Center,
-            column_gap: Val::Px(10.0),
             ..default()
         },
+        children![(content, TextLayout::no_wrap())],
+    )
+}
+
+fn stats_row_node() -> impl Bundle {
+    Node {
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        column_gap: Val::Px(theme::GRID),
+        ..default()
+    }
+}
+
+/// The column headings, as structural labels rather than data.
+fn stats_header_row(cells: [&str; 5]) -> impl Bundle {
+    (
+        stats_row_node(),
         Children::spawn(SpawnIter(
             cells
                 .into_iter()
-                .zip(WIDTHS)
-                .map(move |(content, width)| column(content, width, color))
+                .zip(STATS_WIDTHS)
+                .map(|(content, width)| stats_column(theme::label(content), width))
                 .collect::<Vec<_>>()
                 .into_iter(),
+        )),
+    )
+}
+
+/// One line of the statistics table: the difficulty's name, then four numbers
+/// set with tabular figures so every column lines up.
+fn stats_row(cells: [&str; 5]) -> impl Bundle {
+    let [name, rest @ ..] = cells;
+    (
+        stats_row_node(),
+        Children::spawn((
+            Spawn(stats_column(
+                theme::text(name.to_string(), 18.0, theme::TEXT),
+                STATS_WIDTHS[0],
+            )),
+            SpawnIter(
+                rest.into_iter()
+                    .zip(&STATS_WIDTHS[1..])
+                    .map(|(content, &width)| {
+                        stats_column(
+                            theme::numeric(content.to_string(), 18.0, theme::TEXT),
+                            width,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            ),
         )),
     )
 }
@@ -924,11 +962,10 @@ fn highlight_toggles(
 mod tests {
     use super::*;
 
-    /// The built-in font is an ASCII subset, so a copyright sign or an umlaut
-    /// would render as an empty box on the first screen the player sees.
+    /// The version number is what a bug report actually needs out of this
+    /// line, however the name around it is spelled.
     #[test]
-    fn the_copyright_line_is_plain_ascii() {
-        assert!(COPYRIGHT.is_ascii(), "{COPYRIGHT}");
+    fn the_copyright_line_carries_the_version() {
         assert!(COPYRIGHT.contains(env!("CARGO_PKG_VERSION")));
     }
 

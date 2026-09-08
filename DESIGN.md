@@ -203,10 +203,14 @@ border on any edge whose neighbour belongs to a different region and a hairline
 elsewhere; both cells draw their own, which is exactly the bold divider the
 puzzle needs, at no extra entities.
 
-**Marks are drawn from nodes, not glyphs.** Bevy's built-in font is an ASCII
-subset, so `♛` and `×` render as tofu. The queen is a ringed disc with a crown
-built from rotated squares behind a band; the cross is an ASCII `X`. This is also
-why no UI string contains an em dash or a middle dot — they appeared as boxes.
+**Marks are drawn from nodes, not glyphs.** The queen is a ringed disc with a
+crown built from rotated squares behind a band; the cross is an ASCII `X`.
+Neither Bevy's old built-in font nor the Space Grotesk embedded now carries a
+chess glyph, so `♛` is tofu regardless of which one is set; the disc and crown
+render identically either way. The same reasoning keeps every UI string plain
+ASCII (asserted by a test in `theme.rs`) rather than trusting a particular
+font's coverage of an em dash or a middle dot — a future font change stays
+low-risk instead of a fresh hunt for boxes.
 
 Marks are shown by switching `Node.display` between `None` and `Flex`, not by
 toggling `Visibility`: a hidden node still occupies layout space, which knocks
@@ -214,6 +218,40 @@ the visible mark off centre.
 
 Pausing conceals every mark. The regions stay, since they are the puzzle itself,
 but a stopped clock should not buy free study time.
+
+## The design is flat, and that is a rule, not an omission
+
+Every colour is a solid fill standing for something — a selection, a state, a
+region — never a gradient or a shadow doing the work light and shade would do
+for a physical object. `BoxShadow` and per-side `border_radius` gradients exist
+in Bevy 0.19 and were deliberately left unused: this board is a digital thing,
+not a simulation of a physical one, and reaching for either would be decoration
+standing in for a distinction the colour should already be making.
+
+Type carries the hierarchy that ornament would elsewhere: a screen's own name
+(`theme::title`/`theme::hero`) is set big, bold and uppercase because it is the
+first thing the screen is, not a caption sitting over the real content. Numbers
+that must not jitter in width as their digits change — the clock, the queen
+count, a stats row — go through `theme::numeric`, which turns on tabular
+figures; nothing here fakes a monospaced grid by eye.
+
+A "disabled" control (`theme::DISABLED`) is a translucent fill rather than a
+flat tone borrowed from whatever colour the panel happens to be: a solid colour
+that happened to match its container turned the New Game screen's locked size
+and difficulty rows invisible during development, which is what pushed the fix
+towards "muted against anything behind it" instead of "a fixed dark grey".
+
+**Motion stays inside the idle-redraw budget rather than forcing it open.** A
+button's hover/press tint and a hinted cell's breathing outline (`board.rs`)
+both animate every `Update`, but `WinitSettings` still only *redraws* on input
+or every `IDLE_REDRAW_WAIT`: a continuously-redrawing window was tried and
+pegged the CPU for the sake of motion nobody was looking at while it sat idle.
+The animations are tuned to still read as smooth at that coarser cadence — the
+button transition converges in one or two idle ticks regardless of how long
+each one is, and the hint pulse is slow enough that even a chunkier sample rate
+looks like breathing rather than steps. A screen used to rise and settle into
+place on entering too (`EnterMotion`); it was cut, not for this tension, but
+because the motion itself did not earn its keep.
 
 ## Generation runs off the main thread
 

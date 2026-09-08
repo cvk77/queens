@@ -38,6 +38,7 @@ impl Plugin for GamePlugin {
                 Update,
                 (
                     board::refresh_board,
+                    board::pulse_hint_outlines,
                     hud::refresh_hud,
                     hud::clear_seed_acknowledgement,
                     interaction::keyboard_shortcuts,
@@ -192,7 +193,7 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
         .with_children(|sheet| {
             sheet.spawn(theme::panel()).with_children(|panel| {
                 panel.spawn(theme::title("Solved"));
-                panel.spawn(theme::text(
+                panel.spawn(theme::numeric(
                     theme::format_time(elapsed),
                     38.0,
                     if is_best { theme::SUCCESS } else { theme::TEXT },
@@ -210,41 +211,65 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
                     1 => "1 hint used.".to_string(),
                     n => format!("{n} hints used."),
                 }));
-                panel.spawn(theme::row(8.0)).with_children(|row| {
-                    // The share code, so a puzzle worth keeping can be played
-                    // again. Clicking it copies the code, same as the one in
-                    // the top bar.
-                    row.spawn((
-                        theme::text(format!("#{}", session.puzzle.seed()), 16.0, theme::TEXT_DIM),
-                        TextLayout::no_wrap(),
-                    ))
-                    .observe(hud::copy_seed)
-                    .observe(
-                        |over: On<Pointer<Over>>, mut labels: Query<&mut TextColor>| {
-                            if let Ok(mut color) = labels.get_mut(over.event_target()) {
-                                color.0 = theme::TEXT;
-                            }
-                        },
-                    )
-                    .observe(
-                        |out: On<Pointer<Out>>, mut labels: Query<&mut TextColor>| {
-                            if let Ok(mut color) = labels.get_mut(out.event_target()) {
-                                color.0 = theme::TEXT_DIM;
-                            }
-                        },
-                    );
-                    // Holds its width while empty, so acknowledging a copy
-                    // cannot nudge the code sideways.
-                    row.spawn((
-                        theme::text("", 15.0, theme::ACCENT),
-                        Node {
+                panel
+                    .spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
+                        column_gap: Val::Px(8.0),
+                        // Matches the gap `title` leaves under "Solved": its
+                        // own margin plus the panel's row gap, so every
+                        // section here is spaced the same as the one above it.
+                        margin: UiRect::bottom(Val::Px(theme::GRID * 2.0)),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        // Balances the acknowledgement's reserved width on the
+                        // other side, so the share code itself sits centred
+                        // rather than the whole row (code plus that reserved
+                        // space) merely being centred.
+                        row.spawn(Node {
                             min_width: Val::Px(hud::COPIED_WIDTH_PX),
                             ..default()
-                        },
-                        TextLayout::no_wrap(),
-                        hud::SeedCopied::default(),
-                    ));
-                });
+                        });
+                        // The share code, so a puzzle worth keeping can be played
+                        // again. Clicking it copies the code, same as the one in
+                        // the top bar.
+                        row.spawn((
+                            theme::text(
+                                format!("#{}", session.puzzle.seed()),
+                                16.0,
+                                theme::TEXT_DIM,
+                            ),
+                            TextLayout::no_wrap(),
+                        ))
+                        .observe(hud::copy_seed)
+                        .observe(
+                            |over: On<Pointer<Over>>, mut labels: Query<&mut TextColor>| {
+                                if let Ok(mut color) = labels.get_mut(over.event_target()) {
+                                    color.0 = theme::TEXT;
+                                }
+                            },
+                        )
+                        .observe(
+                            |out: On<Pointer<Out>>, mut labels: Query<&mut TextColor>| {
+                                if let Ok(mut color) = labels.get_mut(out.event_target()) {
+                                    color.0 = theme::TEXT_DIM;
+                                }
+                            },
+                        );
+                        // Holds its width while empty, so acknowledging a copy
+                        // cannot nudge the code sideways.
+                        row.spawn((
+                            theme::text("", 15.0, theme::ACCENT),
+                            Node {
+                                min_width: Val::Px(hud::COPIED_WIDTH_PX),
+                                ..default()
+                            },
+                            TextLayout::no_wrap(),
+                            hud::SeedCopied::default(),
+                        ));
+                    });
 
                 panel.spawn(theme::accent_button("New Puzzle")).observe(
                     |_click: On<Pointer<Click>>,

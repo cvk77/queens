@@ -161,6 +161,12 @@ cargo run -p queens_cli --release -- bench --sizes 5-12 --difficulties all --cou
 that still holds on a fresh solve, and byte-identical regeneration from its seed.
 It exits non-zero if any puzzle fails.
 
+## Credits
+
+Set in [Space Grotesk](https://github.com/floriankarsten/space-grotesk),
+embedded in the binary under its SIL Open Font Licence
+(`crates/queens_app/assets/fonts/OFL.txt`).
+
 ## Layout
 
 | Crate | What it is |

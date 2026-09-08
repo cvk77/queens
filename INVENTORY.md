@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 23 source files, ~9,000 lines, three crates. Start with
+A map of the codebase: 23 source files, ~9,100 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -16,8 +16,8 @@ the task index, then the per-file notes.
 | Board sizes, `Coord`, `Mark`, `Puzzle` | `queens_core/src/board.rs` |
 | Anything about the RNG or seed length | `queens_core/src/rng.rs` |
 | The `queens-gen` CLI and its audit | `queens_cli/src/main.rs` |
-| Colours, fonts, buttons, panels | `queens_app/src/theme.rs` |
-| Board drawing, cell borders, the queen crown | `queens_app/src/game/board.rs` |
+| Colours, the embedded font, type scale, buttons, panels | `queens_app/src/theme.rs` |
+| Board drawing, cell borders, the queen crown, the hint pulse | `queens_app/src/game/board.rs` |
 | Clicks, drags, keyboard shortcuts | `queens_app/src/game/interaction.rs` |
 | Undo, auto-cross, hint requests, the hint tally | `queens_app/src/session.rs` |
 | Top bar, toolbar, timer, hint line | `queens_app/src/game/hud.rs` |
@@ -79,14 +79,14 @@ regeneration from its seed.
 |---|---|---|
 | `main.rs` | 68 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 34 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings) and `PlayState` sub-state (Active, Paused, Won) |
-| `theme.rs` | 366 | Palette, both region palettes and their colour names, `screen`/`panel`/`row`/`text`/`title`/`footnote`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` hover system, `format_time` |
+| `theme.rs` | 523 | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
 | `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
-| `generation.rs` | 99 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, animates the ellipsis |
-| `menu.rs` | 1116 | Main menu (with the version and copyright line), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
-| `game/mod.rs` | 227 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
-| `game/board.rs` | 425 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board` |
-| `game/hud.rs` | 395 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
+| `generation.rs` | 142 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, pulses the loading dots |
+| `menu.rs` | 1147 | Main menu (with the version and copyright line, pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
+| `game/mod.rs` | 270 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
+| `game/board.rs` | 455 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline |
+| `game/hud.rs` | 401 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
 | `game/interaction.rs` | 495 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts |
 | `capture.rs` | 672 | The scripted run: screenshots every screen and asserts real pointer gestures |
 

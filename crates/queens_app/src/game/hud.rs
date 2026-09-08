@@ -120,9 +120,9 @@ pub fn spawn_top_bar(parent: &mut ChildSpawnerCommands, session: &Session) {
         ));
         bar.spawn(spacer());
 
-        bar.spawn((theme::text("0:00", 19.0, theme::TEXT), TimerLabel));
+        bar.spawn((theme::numeric("0:00", 20.0, theme::TEXT), TimerLabel));
         bar.spawn((
-            theme::text("", 19.0, theme::TEXT_DIM),
+            theme::numeric("", 20.0, theme::TEXT_DIM),
             QueensLabel,
             Node {
                 min_width: Val::Px(130.0),
@@ -212,6 +212,7 @@ pub fn spawn_bottom_bar(parent: &mut ChildSpawnerCommands) {
                         // whole number of these.
                         TextFont {
                             font_size: FontSize::Px(MESSAGE_FONT_PX),
+                            weight: FontWeight::MEDIUM,
                             ..default()
                         },
                         LineHeight::Px(MESSAGE_LINE_PX),
@@ -329,7 +330,11 @@ pub fn refresh_hud(
                 HistoryButton::Undo => session.can_undo(),
                 HistoryButton::Redo => session.can_redo(),
             };
-            let base = if enabled { theme::BUTTON } else { theme::PANEL };
+            let base = if enabled {
+                theme::BUTTON
+            } else {
+                theme::DISABLED
+            };
             if tint.base != base {
                 tint.base = base;
             }

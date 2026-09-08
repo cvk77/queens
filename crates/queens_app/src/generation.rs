@@ -22,7 +22,7 @@ impl Plugin for GenerationPlugin {
         app.add_systems(OnEnter(AppState::Generating), (spawn_screen, start_task))
             .add_systems(
                 Update,
-                (animate_ellipsis, finish_task).run_if(in_state(AppState::Generating)),
+                (animate_loading_dots, finish_task).run_if(in_state(AppState::Generating)),
             );
     }
 }
@@ -31,8 +31,18 @@ impl Plugin for GenerationPlugin {
 #[derive(Component)]
 struct GenerationTask(Task<Puzzle>);
 
+/// One of the three dots that pulse in sequence while a search runs, so a
+/// long Expert search does not look frozen. Carries its place in the
+/// sequence, which sets its phase offset.
 #[derive(Component)]
-struct Ellipsis(f32);
+struct LoadingDot(usize);
+
+/// How many dots pulse across the loading screen.
+const LOADING_DOTS: usize = 3;
+/// How far apart in phase each dot trails the one before it.
+const LOADING_DOT_PHASE: f32 = 0.6;
+/// How fast the pulse cycles, in radians per second.
+const LOADING_PULSE_RATE: f32 = 3.0;
 
 fn spawn_screen(mut commands: Commands, request: Res<PuzzleRequest>) {
     let seed = request.seed;
@@ -41,12 +51,39 @@ fn spawn_screen(mut commands: Commands, request: Res<PuzzleRequest>) {
         children![(
             theme::panel(),
             children![
-                theme::text("Building a puzzle", 30.0, theme::TEXT),
-                (theme::subtitle(""), Ellipsis(0.0),),
+                theme::title("Building a puzzle"),
+                loading_dots(),
                 theme::subtitle(format!("{0}x{0}   {1}", seed.size, seed.difficulty)),
             ],
         )],
     ));
+}
+
+/// Three flat, filled dots — a "still working" tell that pulses rather than a
+/// line of text that grows and shrinks.
+fn loading_dots() -> impl Bundle {
+    (
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            column_gap: Val::Px(theme::GRID),
+            margin: UiRect::vertical(Val::Px(theme::GRID)),
+            ..default()
+        },
+        Children::spawn(SpawnIter((0..LOADING_DOTS).map(|i| {
+            (
+                LoadingDot(i),
+                Node {
+                    width: Val::Px(14.0),
+                    height: Val::Px(14.0),
+                    border_radius: BorderRadius::MAX,
+                    ..default()
+                },
+                BackgroundColor(theme::ACCENT),
+            )
+        }))),
+    )
 }
 
 /// Hands the search to the async compute pool.
@@ -56,12 +93,18 @@ fn start_task(mut commands: Commands, request: Res<PuzzleRequest>) {
     commands.spawn((GenerationTask(task), DespawnOnExit(AppState::Generating)));
 }
 
-/// A cheap "still working" tell, so a long Expert search does not look frozen.
-fn animate_ellipsis(time: Res<Time>, mut labels: Query<(&mut Ellipsis, &mut Text)>) {
-    for (mut ellipsis, mut label) in &mut labels {
-        ellipsis.0 += time.delta_secs();
-        let dots = ((ellipsis.0 * 2.5) as usize % 4) + 1;
-        label.0 = ".".repeat(dots);
+/// Pulses each dot's size and opacity in sequence, entirely as a function of
+/// elapsed time, so nothing here can drift out of step with itself.
+fn animate_loading_dots(
+    time: Res<Time>,
+    mut dots: Query<(&LoadingDot, &mut BackgroundColor, &mut UiTransform)>,
+) {
+    for (dot, mut background, mut transform) in &mut dots {
+        let phase = time.elapsed_secs() * LOADING_PULSE_RATE - dot.0 as f32 * LOADING_DOT_PHASE;
+        let t = phase.sin() * 0.5 + 0.5;
+        transform.scale = Vec2::splat(0.7 + 0.3 * t);
+        let colour = theme::ACCENT.to_srgba();
+        background.0 = Color::srgba(colour.red, colour.green, colour.blue, 0.35 + 0.65 * t);
     }
 }
 
