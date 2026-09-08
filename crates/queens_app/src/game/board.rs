@@ -2,6 +2,7 @@
 //! step with the session.
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use queens_core::{ALL_SIDES, Coord, HintKind, Mark, Puzzle, Side};
 
 use crate::persistence::SaveData;
@@ -29,6 +30,32 @@ pub struct Cell {
     pub coord: Coord,
 }
 
+/// Marks the grid node so [`snap_board_size`] can keep its pixel size a
+/// multiple of `size` whenever the window resizes.
+#[derive(Component)]
+pub(crate) struct BoardGrid {
+    size: u8,
+}
+
+/// The board's side length in logical pixels, picked so that dividing it into
+/// `size` equal cells lands every cell boundary on a whole device pixel.
+///
+/// Taffy resolves each of the `size` grid tracks by splitting the board's
+/// logical width evenly; done in physical pixels, "evenly" almost never
+/// divides whole, so adjacent cells end up a fraction of a pixel apart and
+/// their shared border renders at an inconsistent width from one edge of the
+/// board to the next. Working in physical pixels here, then converting back
+/// to logical, is what makes the division come out even after the window's
+/// scale factor is reapplied.
+fn board_side_px(window: &Window, size: u8) -> f32 {
+    let scale = window.scale_factor();
+    let physical_min = window.physical_width().min(window.physical_height()) as f32;
+    let cell_physical = (physical_min * BOARD_VMIN / 100.0 / f32::from(size))
+        .floor()
+        .max(1.0);
+    cell_physical * f32::from(size) / scale
+}
+
 /// The queen token inside a cell.
 #[derive(Component)]
 pub(crate) struct QueenMark;
@@ -43,9 +70,15 @@ pub(crate) struct CrossMark;
 /// The whole thing is one `Display::Grid` so the rulers cannot drift out of
 /// step with the cells: `auto` tracks take their size from the board node
 /// itself.
-pub fn spawn_grid(parent: &mut ChildSpawnerCommands, session: &Session, save: &SaveData) {
+pub fn spawn_grid(
+    parent: &mut ChildSpawnerCommands,
+    session: &Session,
+    save: &SaveData,
+    window: &Window,
+) {
     let puzzle = &session.puzzle;
     let size = puzzle.size();
+    let board_side = Val::Px(board_side_px(window, size));
 
     parent
         .spawn(Node {
@@ -74,12 +107,13 @@ pub fn spawn_grid(parent: &mut ChildSpawnerCommands, session: &Session, save: &S
                         display: Display::Grid,
                         grid_template_columns: RepeatedGridTrack::flex(u16::from(size), 1.0),
                         grid_template_rows: RepeatedGridTrack::flex(u16::from(size), 1.0),
-                        width: Val::VMin(BOARD_VMIN),
-                        height: Val::VMin(BOARD_VMIN),
+                        width: board_side,
+                        height: board_side,
                         border: UiRect::all(Val::Px(BOARD_BORDER_PX)),
                         border_radius: BorderRadius::all(Val::Px(6.0)),
                         ..default()
                     },
+                    BoardGrid { size },
                     BackgroundColor(theme::REGION_EDGE),
                     BorderColor::all(theme::REGION_EDGE),
                 ))
@@ -375,6 +409,26 @@ fn cross_bar(degrees: f32) -> impl Bundle {
         BackgroundColor(theme::CROSS),
         UiTransform::from_rotation(Rot2::degrees(degrees)),
     )
+}
+
+/// Re-snaps the board to the device pixel grid whenever the window is
+/// resized (or the display it's on changes scale factor). Skipped once the
+/// size already matches, so an untouched window costs one `Val` comparison a
+/// frame rather than a `Node` mutation.
+pub fn snap_board_size(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut boards: Query<(&BoardGrid, &mut Node)>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    for (board, mut node) in &mut boards {
+        let side = Val::Px(board_side_px(window, board.size));
+        if node.width != side {
+            node.width = side;
+            node.height = side;
+        }
+    }
 }
 
 /// Redraws marks, conflicts and hints whenever the session or the palette

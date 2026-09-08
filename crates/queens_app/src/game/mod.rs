@@ -6,6 +6,7 @@ mod hud;
 mod interaction;
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 use crate::persistence::{InProgress, SaveData};
 use crate::session::{PuzzleRequest, Session};
@@ -39,6 +40,7 @@ impl Plugin for GamePlugin {
                 (
                     board::refresh_board,
                     board::pulse_hint_outlines,
+                    board::snap_board_size,
                     hud::refresh_hud,
                     hud::clear_seed_acknowledgement,
                     interaction::keyboard_shortcuts,
@@ -56,7 +58,15 @@ impl Plugin for GamePlugin {
 }
 
 /// Lays out the playing screen: status bar, board, toolbar.
-fn spawn_screen(mut commands: Commands, session: Res<Session>, save: Res<SaveData>) {
+fn spawn_screen(
+    mut commands: Commands,
+    session: Res<Session>,
+    save: Res<SaveData>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
     commands
         .spawn((
             Node {
@@ -81,7 +91,7 @@ fn spawn_screen(mut commands: Commands, session: Res<Session>, save: Res<SaveDat
                     justify_content: JustifyContent::Center,
                     ..default()
                 })
-                .with_children(|middle| board::spawn_grid(middle, &session, &save));
+                .with_children(|middle| board::spawn_grid(middle, &session, &save, window));
             hud::spawn_bottom_bar(screen);
         });
 }
