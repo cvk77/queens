@@ -7,3 +7,6 @@ description = "Board model, puzzle generator and solvers for the Queens puzzle g
 
 [dependencies]
 serde = { workspace = true }
+
+[lints]
+workspace = true

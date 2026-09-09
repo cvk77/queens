@@ -22,8 +22,11 @@ const EMPTY_SET: CellSet = [0; MAX];
 /// One of the three families of "exactly one queen goes here" constraints.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Family {
+    /// The rows of the board.
     Rows,
+    /// The columns of the board.
     Columns,
+    /// The coloured regions.
     Regions,
 }
 
@@ -51,23 +54,28 @@ impl Family {
 /// A single constraint: one row, one column or one region.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Unit {
+    /// Which family this constraint belongs to.
     pub family: Family,
+    /// Which row, column or region within that family, from zero.
     pub index: u8,
 }
 
 impl Unit {
+    /// The constraint covering one row.
     pub const fn row(index: u8) -> Self {
         Self {
             family: Family::Rows,
             index,
         }
     }
+    /// The constraint covering one column.
     pub const fn column(index: u8) -> Self {
         Self {
             family: Family::Columns,
             index,
         }
     }
+    /// The constraint covering one region.
     pub const fn region(index: u8) -> Self {
         Self {
             family: Family::Regions,
@@ -152,7 +160,9 @@ pub enum Action {
 /// One step of a logical solve.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Step {
+    /// The rule that produced this step.
     pub rule: RuleId,
+    /// What the step tells the player to do.
     pub action: Action,
     /// The units the deduction reasoned from. One for most rules; a locked set
     /// reasons from `k` of them at once and the explanation has to name them
@@ -343,6 +353,8 @@ pub enum HintKind {
 /// A single suggestion for the player.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Hint {
+    /// Whether the hint places a queen, eliminates cells, or has nothing
+    /// left to say.
     pub kind: HintKind,
     /// The rule behind the suggestion, if it came from one.
     pub rule: Option<RuleId>,

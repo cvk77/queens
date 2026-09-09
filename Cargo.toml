@@ -10,6 +10,12 @@ edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 
+# "Every public item carries a doc comment" is a convention this repo already
+# holds itself to; stating it here is what makes the editor and CI say so
+# rather than a reviewer. CI's `clippy -- -D warnings` promotes it to an error.
+[workspace.lints.rust]
+missing_docs = "warn"
+
 [workspace.dependencies]
 queens_core = { path = "crates/queens_core" }
 # Default features pull in the whole 3D pipeline (bevy_pbr, bevy_gltf, KTX2,

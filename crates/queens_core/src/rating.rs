@@ -121,10 +121,14 @@ impl RuleId {
     Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default, Serialize, Deserialize,
 )]
 pub enum Difficulty {
+    /// Solvable by propagation and last cells alone.
     #[default]
     Easy,
+    /// Needs a confinement or a shared elimination.
     Medium,
+    /// Needs a locked set.
     Hard,
+    /// Needs proof by contradiction.
     Expert,
 }
 
@@ -137,6 +141,7 @@ pub const ALL_DIFFICULTIES: [Difficulty; 4] = [
 ];
 
 impl Difficulty {
+    /// The name shown to the player.
     pub const fn name(self) -> &'static str {
         match self {
             Difficulty::Easy => "Easy",

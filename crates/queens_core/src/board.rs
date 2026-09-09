@@ -12,11 +12,14 @@ pub const MAX_SIZE: u8 = 12;
 /// A cell position, row-major from the top-left.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
 pub struct Coord {
+    /// Row index, counted from the top.
     pub row: u8,
+    /// Column index, counted from the left.
     pub col: u8,
 }
 
 impl Coord {
+    /// A cell at the given row and column.
     pub const fn new(row: u8, col: u8) -> Self {
         Self { row, col }
     }
@@ -72,9 +75,13 @@ fn offset_cells(
 /// different regions.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Side {
+    /// The edge shared with the cell above.
     Top,
+    /// The edge shared with the cell to the right.
     Right,
+    /// The edge shared with the cell below.
     Bottom,
+    /// The edge shared with the cell to the left.
     Left,
 }
 
@@ -159,6 +166,7 @@ impl Puzzle {
         }
     }
 
+    /// Width of the board, which is also its height and its queen count.
     pub fn size(&self) -> u8 {
         self.size
     }
@@ -254,10 +262,12 @@ impl BoardState {
         (marks.len() == usize::from(size) * usize::from(size)).then_some(Self { size, marks })
     }
 
+    /// Width of the board these marks belong to.
     pub fn size(&self) -> u8 {
         self.size
     }
 
+    /// Every mark, row-major from the top-left.
     pub fn marks(&self) -> &[Mark] {
         &self.marks
     }
@@ -266,10 +276,12 @@ impl BoardState {
         usize::from(cell.row) * usize::from(self.size) + usize::from(cell.col)
     }
 
+    /// The mark on one cell.
     pub fn get(&self, cell: Coord) -> Mark {
         self.marks[self.index(cell)]
     }
 
+    /// Replaces the mark on one cell.
     pub fn set(&mut self, cell: Coord, mark: Mark) {
         let i = self.index(cell);
         self.marks[i] = mark;
@@ -285,6 +297,7 @@ impl BoardState {
             .map(move |(i, _)| Coord::new((i / size) as u8, (i % size) as u8))
     }
 
+    /// How many queens are on the board.
     pub fn queen_count(&self) -> usize {
         self.marks.iter().filter(|m| **m == Mark::Queen).count()
     }

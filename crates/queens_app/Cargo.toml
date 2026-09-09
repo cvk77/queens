@@ -21,3 +21,6 @@ serde = { workspace = true }
 ron = { workspace = true }
 dirs = { workspace = true }
 ureq = { version = "3.4.1", features = ["json"] }
+
+[lints]
+workspace = true

@@ -9,8 +9,11 @@ use crate::board::{BoardState, Coord, Mark, Puzzle};
 /// Why two queens conflict.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ViolationKind {
+    /// The queens share a row.
     Row,
+    /// The queens share a column.
     Column,
+    /// The queens share a region.
     Region,
     /// The queens touch, orthogonally or diagonally.
     Touching,
@@ -32,8 +35,11 @@ impl ViolationKind {
 /// order, so each conflict is reported once.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Violation {
+    /// Which rule the pair breaks.
     pub kind: ViolationKind,
+    /// The earlier of the two cells in row-major order.
     pub a: Coord,
+    /// The later of the two cells in row-major order.
     pub b: Coord,
 }
 

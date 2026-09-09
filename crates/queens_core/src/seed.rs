@@ -25,6 +25,7 @@ pub struct PuzzleSeed {
 }
 
 impl PuzzleSeed {
+    /// A seed for a puzzle of this size and difficulty.
     pub fn new(size: u8, difficulty: Difficulty, seed: u64) -> Self {
         Self {
             size,
