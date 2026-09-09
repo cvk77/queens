@@ -6,6 +6,7 @@
 //! on load. That keeps the file tiny and makes the determinism guarantee in
 //! `queens_core` load-bearing rather than incidental.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 use bevy::prelude::*;
@@ -136,42 +137,71 @@ impl SaveData {
         });
     }
 
-    /// Where the save file lives. `None` if the platform has no data directory.
-    pub fn path() -> Option<PathBuf> {
-        dirs::data_dir().map(|dir| dir.join("queens").join("save.ron"))
-    }
-
-    /// Reads the save file, falling back to defaults for anything unreadable.
+    /// Reads the stored save, falling back to defaults for anything unreadable.
     ///
-    /// A corrupt or outdated file is never fatal: the player loses their
+    /// A corrupt or outdated save is never fatal: the player loses their
     /// statistics, not their ability to launch the game.
     pub fn load() -> Self {
-        let Some(path) = Self::path() else {
-            return Self::default();
-        };
-        let Ok(contents) = std::fs::read_to_string(&path) else {
+        let Some(contents) = backend::read() else {
             return Self::default();
         };
         match ron::from_str::<SaveData>(&contents) {
             Ok(data) if data.version == SAVE_VERSION => data,
             Ok(data) => {
                 warn!(
-                    "save file is version {} but this build expects {SAVE_VERSION}; starting fresh",
+                    "save is version {} but this build expects {SAVE_VERSION}; starting fresh",
                     data.version
                 );
                 Self::default()
             }
             Err(error) => {
-                warn!("could not read save file at {}: {error}", path.display());
+                warn!(
+                    "could not read the save at {}: {error}",
+                    backend::describe()
+                );
                 Self::default()
             }
         }
     }
 
-    /// Writes the save file, reporting rather than propagating failures — a
-    /// game should not stop because a disk write did.
+    /// Writes the save, reporting rather than propagating failures — a game
+    /// should not stop because a write did.
     pub fn save(&self) {
-        let Some(path) = Self::path() else {
+        match ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default()) {
+            Ok(text) => backend::write(&text),
+            Err(error) => warn!("could not serialise the save: {error}"),
+        }
+    }
+}
+
+/// Where a save is kept, which is the only thing about persistence that
+/// differs between a desktop build and a browser one. The format either side
+/// writes is the same RON, so [`SAVE_VERSION`] governs both.
+mod backend {
+    use super::*;
+
+    /// The save file on disk. `None` if the platform has no data directory.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn path() -> Option<PathBuf> {
+        dirs::data_dir().map(|dir| dir.join("queens").join("save.ron"))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn describe() -> String {
+        path().map_or_else(
+            || "<no data directory>".to_string(),
+            |p| p.display().to_string(),
+        )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn read() -> Option<String> {
+        std::fs::read_to_string(path()?).ok()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn write(text: &str) {
+        let Some(path) = path() else {
             return;
         };
         if let Some(parent) = path.parent()
@@ -180,13 +210,42 @@ impl SaveData {
             warn!("could not create {}: {error}", parent.display());
             return;
         }
-        match ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default()) {
-            Ok(text) => {
-                if let Err(error) = std::fs::write(&path, text) {
-                    warn!("could not write {}: {error}", path.display());
-                }
-            }
-            Err(error) => warn!("could not serialise the save file: {error}"),
+        if let Err(error) = std::fs::write(&path, text) {
+            warn!("could not write {}: {error}", path.display());
+        }
+    }
+
+    /// The key the save lives under in `localStorage`. Namespaced because an
+    /// itch.io page shares an origin with every other game on that domain.
+    #[cfg(target_arch = "wasm32")]
+    const STORAGE_KEY: &str = "de.treestack.queens.save";
+
+    /// `localStorage`, when the browser will give it to us. Private browsing
+    /// and blocked site data both make this `None`, which is treated exactly
+    /// like a missing save file: defaults, and writes that quietly go nowhere.
+    #[cfg(target_arch = "wasm32")]
+    fn storage() -> Option<web_sys::Storage> {
+        web_sys::window()?.local_storage().ok()?
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn describe() -> String {
+        format!("localStorage[{STORAGE_KEY}]")
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn read() -> Option<String> {
+        storage()?.get_item(STORAGE_KEY).ok()?
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn write(text: &str) {
+        let Some(storage) = storage() else {
+            warn!("no localStorage available; this session will not be saved");
+            return;
+        };
+        if storage.set_item(STORAGE_KEY, text).is_err() {
+            warn!("could not write to localStorage; it may be full");
         }
     }
 }

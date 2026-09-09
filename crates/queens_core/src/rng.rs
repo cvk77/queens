@@ -104,7 +104,10 @@ pub const MAX_FRESH_SEED: u64 = 100_000_000;
 /// The seed itself is then stored, so play remains fully reproducible; only the
 /// choice of seed is non-deterministic.
 pub fn entropy_seed() -> u64 {
+    #[cfg(not(target_arch = "wasm32"))]
     use std::time::{SystemTime, UNIX_EPOCH};
+    #[cfg(target_arch = "wasm32")]
+    use web_time::{SystemTime, UNIX_EPOCH};
 
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

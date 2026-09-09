@@ -4097,6 +4097,7 @@ dependencies = [
  "ron",
  "serde",
  "ureq",
+ "web-sys",
 ]
 
 [[package]]
@@ -4111,6 +4112,7 @@ name = "queens_core"
 version = "0.2.7"
 dependencies = [
  "serde",
+ "web-time",
 ]
 
 [[package]]

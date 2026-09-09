@@ -39,11 +39,7 @@ const IDLE_REDRAW_WAIT: Duration = Duration::from_millis(100);
 fn main() -> AppExit {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Queens".into(),
-                resolution: (1024u32, 820u32).into(),
-                ..default()
-            }),
+            primary_window: Some(primary_window()),
             ..default()
         }))
         .insert_resource(WinitSettings {
@@ -66,6 +62,24 @@ fn main() -> AppExit {
         ))
         .add_systems(Startup, spawn_camera)
         .run()
+}
+
+/// The window the game opens in.
+///
+/// On the web there is no window to size: the page places the canvas, and
+/// fit_canvas_to_parent lets its container decide how big the game is, which
+/// is what an itch.io embed frame expects.
+fn primary_window() -> Window {
+    Window {
+        title: "Queens".into(),
+        #[cfg(not(target_arch = "wasm32"))]
+        resolution: (1024u32, 820u32).into(),
+        #[cfg(target_arch = "wasm32")]
+        canvas: Some("#queens".into()),
+        #[cfg(target_arch = "wasm32")]
+        fit_canvas_to_parent: true,
+        ..default()
+    }
 }
 
 fn spawn_camera(mut commands: Commands) {

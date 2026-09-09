@@ -19,8 +19,19 @@ queens_core = { workspace = true }
 bevy = { workspace = true }
 serde = { workspace = true }
 ron = { workspace = true }
-dirs = { workspace = true }
+
+# Neither of these has an answer in a browser. `dirs` has no data directory to
+# name, and `ureq` pulls `ring`, which needs a C toolchain to build for wasm
+# and sockets a browser will not give it. The itch build is always the current
+# version, so there is no update for it to check for either.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ureq = { version = "3.4.1", features = ["json"] }
+dirs = { workspace = true }
+
+# localStorage stands in for the data directory. An itch.io page shares its
+# origin with every other game on that domain, hence the namespaced key.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Storage", "Window"] }
 
 [lints]
 workspace = true

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title>Queens</title>
+
+    <!--
+      Trunk compiles the crate beside this file to wasm, runs wasm-bindgen, and
+      shrinks the result with wasm-opt -Oz. The release profile is already
+      tuned for size, and the download is the one thing a browser player has to
+      wait on.
+
+      The feature flags are not optional. rustc enables bulk-memory,
+      multivalue, mutable-globals, nontrapping-fptoint, reference-types and
+      sign-ext by default for wasm32-unknown-unknown, and wasm-opt rejects
+      input using a feature it was not told to expect, so the two lists have to
+      agree. Check them against "rustc --target wasm32-unknown-unknown --print
+      target-features" after a toolchain bump.
+    -->
+    <link
+      data-trunk
+      rel="rust"
+      data-wasm-opt="z"
+      data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-multivalue --enable-mutable-globals --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext"
+    />
+
+    <style>
+      /* theme::BACKGROUND, painted here as well as by the game so the page
+         does not flash white while the wasm downloads. */
+      :root {
+        --background: #121317;
+        --text-dim: #8b92a6;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--background);
+      }
+
+      /* itch.io serves the game in a fixed-size iframe, so the canvas takes
+         the frame it is given rather than asking for a size of its own.
+         fit_canvas_to_parent on the Bevy side follows this element. */
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+        /* Positioned so it stacks above #loading. The canvas is transparent
+           until the first frame, so the message shows through until there is
+           something to replace it, and stays put if the game never starts. */
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Sits behind the canvas, so the first painted frame covers it. No
+         progress bar: there is nothing honest to report, and a stalled bar
+         reads worse than a still message. */
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 16px/1.4 ui-sans-serif, system-ui, sans-serif;
+        color: var(--text-dim);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="loading">Loading Queens...</div>
+    <canvas id="queens"></canvas>
+  </body>
+</html>

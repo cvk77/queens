@@ -1,0 +1,14 @@
+# `trunk build --release` from this directory produces a dist/ that is already
+# the shape itch.io wants: an index.html at the root with its assets beside it.
+
+[build]
+release = true
+dist = "dist"
+# itch.io serves the game from a directory it chooses, so every asset has to be
+# referenced relative to index.html rather than from the server root.
+public_url = "./"
+
+[tools]
+# Pinned to the version Bevy's wasm-bindgen crate expects. A mismatch between
+# the two is the usual cause of a bundle that builds and then fails to start.
+wasm_bindgen = "0.2.128"

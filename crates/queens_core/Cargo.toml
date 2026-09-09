@@ -8,5 +8,12 @@ description = "Board model, puzzle generator and solvers for the Queens puzzle g
 [dependencies]
 serde = { workspace = true }
 
+# `std::time::SystemTime::now()` is not merely unavailable on
+# wasm32-unknown-unknown, it panics: std routes the target to its `unsupported`
+# implementation. `web-time` reads the browser clock instead, and re-exports
+# std everywhere else, so `entropy_seed` keeps one shape.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"
+
 [lints]
 workspace = true

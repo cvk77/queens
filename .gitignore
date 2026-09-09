@@ -1,2 +1,5 @@
 .idea
 /target
+
+# `trunk build` output for the web version.
+/crates/queens_app/dist

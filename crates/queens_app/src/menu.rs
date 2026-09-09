@@ -98,6 +98,10 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>, latest: Res<Late
                     panel
                         .spawn(theme::menu_button("Settings"))
                         .observe(go_to(AppState::Settings));
+                    // A browser tab is closed by the browser, and quitting the
+                    // app there would only leave the player looking at a dead
+                    // canvas with no way back.
+                    #[cfg(not(target_arch = "wasm32"))]
                     panel.spawn(theme::menu_button("Quit")).observe(
                         |_click: On<Pointer<Click>>,
                          save: Res<SaveData>,
