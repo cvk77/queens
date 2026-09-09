@@ -31,6 +31,17 @@ machine agree. Bumping it is the `channel` line; rustup fetches the rest.
 A release build of `queens_app` takes ~13 minutes (thin LTO, one codegen unit).
 Use a debug build unless you are producing artifacts.
 
+The game also targets the browser, which is how it ships on itch.io:
+
+```sh
+cargo clippy -p queens_app --target wasm32-unknown-unknown -- -D warnings
+cd crates/queens_app && trunk build --release   # dist/, ready to zip for itch
+```
+
+**Both targets have to build.** The web build is a set of `cfg`s on one
+codebase, not a fork, so a change that only compiles for the desktop is a
+broken change. See "The web build" below.
+
 ## Invariants that must not break
 
 **Generation is deterministic.** The same `PuzzleSeed` must always yield a
@@ -106,6 +117,36 @@ queen and its crown are drawn from UI nodes rather than a glyph, and every
 region name is asserted plain ASCII in `theme.rs`'s tests. Not a font
 limitation any more (the embedded Space Grotesk carries a normal Latin set),
 but a deliberate one: Doc comments and Markdown are fine.
+
+## The web build
+
+One codebase, `cfg`d in five places. Each one exists for a reason that is not
+obvious from the desktop side:
+
+| Where | Why |
+|---|---|
+| `rng.rs` `entropy_seed` | `std::time::SystemTime::now()` does not merely lack a clock on `wasm32-unknown-unknown`, it **panics**: std routes the target to its `unsupported` implementation. `web-time` reads the browser clock. This compiles clean and only fails at runtime, on the first "New Game" |
+| `persistence.rs` `backend` | `dirs::data_dir()` has no answer in a browser. The RON and `SAVE_VERSION` are identical either side; only the store differs (a file, or `localStorage`) |
+| `update_check.rs` | `ureq` pulls `ring`, which needs a C toolchain to build for wasm. Stubbed to "nothing newer", since itch always serves the current build |
+| `main.rs` `primary_window` | A page places the canvas; there is no window to give a resolution to |
+| `menu.rs` | No Quit: exiting would leave a dead canvas the player cannot get back from |
+
+`ureq` and `dirs` are `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
+so they are not even built for the web. `web-time` and `web-sys` were already
+in the lockfile via Bevy, so none of this added a dependency.
+
+**wasm-opt has to be told which wasm features rustc used.** rustc enables
+`bulk-memory`, `multivalue`, `mutable-globals`, `nontrapping-fptoint`,
+`reference-types` and `sign-ext` by default; wasm-opt rejects input using a
+feature it was not told to expect, and the failure is a wall of validator
+errors, not a clear message. The list lives in `index.html`'s
+`data-wasm-opt-params`. Check it against `rustc --target wasm32-unknown-unknown
+--print target-features` after a toolchain bump.
+
+**Testing the web build in a hidden or backgrounded tab will mislead you.**
+Chrome throttles `requestAnimationFrame` to zero there, and Bevy's loop runs on
+it, so the clock stops, animations freeze and the autosave timer never fires.
+None of that is a bug. Use a real, visible window.
 
 ## Conventions
 

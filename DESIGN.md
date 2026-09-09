@@ -290,6 +290,28 @@ a failed check. Looking at the output caught four bugs that no test would have:
 a panic from a duplicate component in a bundle, tofu glyphs, a wrapping counter
 and a misaligned table column.
 
+## The browser build is the same game, not a port
+
+The web version is the same binary target compiled for `wasm32-unknown-unknown`,
+with five `cfg`s where the platform genuinely has no answer, rather than a
+parallel implementation. The list is in [CLAUDE.md](CLAUDE.md); what matters
+here is the shape of the split.
+
+Persistence is the interesting one. Rather than making the save layer abstract,
+`persistence.rs` keeps one `SaveData` and one RON format and swaps only *where
+the bytes go* — a file under `dirs::data_dir()`, or `localStorage`. That means
+`SAVE_VERSION` still governs both, and a change to generation still invalidates
+both, which is the property that made the version number load-bearing in the
+first place. An abstraction with two implementations would have let the two
+drift; a two-function backend cannot.
+
+`queens_core` gained a wasm-only dependency (`web-time`) and that is not a
+breach of the no-Bevy rule. The rule exists so the generator stays testable at
+scale without a renderer, and a clock shim does not touch that. It was needed
+because `SystemTime::now()` *panics* on this target rather than failing to
+compile, so the alternative was a runtime crash on the first randomly seeded
+game.
+
 ## Known trade-offs
 
 - **Easy and Expert at 12×12 are slow.** Both are scarce (a few percent of
@@ -300,3 +322,11 @@ and a misaligned table column.
 - **Lint and formatting run on Linux only in CI.** The tests run on all three
   platforms, but the same clippy warnings fire on each, so checking three times
   would only spend runner minutes.
+- **Nothing builds or checks the web target in CI.** It is a `cfg`d variant of
+  the same code, so it can break without a desktop build noticing. Until CI
+  runs `cargo clippy --target wasm32-unknown-unknown`, that is caught only by
+  whoever remembers to run it.
+- **A 12×12 search would freeze a browser tab.** Generation runs on the async
+  compute pool, which on wasm without atomics is the main thread. The sizes
+  that take seconds on the desktop are the ones that would stall the page, and
+  the loading animation cannot run to say so. Untested, and unaddressed.

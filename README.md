@@ -182,6 +182,28 @@ what is offered instead.
 The macOS build is a different story: it is signed and notarized, and opens
 without a prompt.
 
+## Playing in a browser
+
+The game also builds to WebAssembly, which is how it is published on itch.io.
+That needs [Trunk](https://trunkrs.dev):
+
+```sh
+cargo install --locked trunk
+cd crates/queens_app
+trunk serve --release --open   # play it locally
+trunk build --release          # dist/ is what itch.io wants, zipped
+```
+
+The bundle is about 18 MB, or 5.7 MB over the wire once the server compresses
+it. Give it a viewport of at least 840x700: below that the board header wraps
+at 12x12, and the How to Play screen loses its Back and Next buttons.
+
+Two things differ from the desktop build. Settings, statistics and the resumed
+game live in that page's local storage rather than in a file, so they are
+per-browser, and a private window always starts fresh. There is no update check
+and no Quit button, because the page is always the current version and the tab
+is the browser's to close.
+
 ## The generator tool
 
 `queens-gen` exercises the puzzle generator without opening a window — useful

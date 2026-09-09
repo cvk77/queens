@@ -157,6 +157,8 @@ cargo test -p queens_core --lib --release -- --ignored --nocapture lumpiness_swe
 | `rust-toolchain.toml` | The pinned toolchain, so CI and a development machine agree |
 | `.gitattributes` | LF endings, so a shell script edited on Windows still runs on macOS |
 | `.github/dependabot.yml` | Monthly cargo and actions updates, with Bevy grouped into one pull request |
+| `crates/queens_app/index.html` | The web build's page: the canvas the game draws into, and the wasm-opt feature flags it will not build without |
+| `crates/queens_app/Trunk.toml` | `trunk build --release` settings; its `dist/` is the itch.io upload |
 | `.github/workflows/ci.yml` | Checks, the generator audit, a 3-platform binary matrix, tag releases; the macOS leg signs, notarizes and DMGs the game |
 | `packaging/macos/` | `build_dmg.sh` (bundles, codesigns, DMGs and notarizes `queens.app`; ad-hoc-signs and skips notarization when run locally with no credentials), `Info.plist`, `AppIcon.icns` and the `generate_icon.py` that drew it |
 | `README.md` | The game, its rules, how to build and play |
