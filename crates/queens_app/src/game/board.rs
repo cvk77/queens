@@ -37,8 +37,13 @@ pub(crate) struct BoardGrid {
     size: u8,
 }
 
-/// The board's side length in logical pixels, picked so that dividing it into
-/// `size` equal cells lands every cell boundary on a whole device pixel.
+/// The side length in logical pixels of the area the cells divide up, picked so
+/// that splitting it into `size` equal cells lands every boundary on a whole
+/// device pixel.
+///
+/// This is the grid's *content* size, which is why the board node sets
+/// [`BoxSizing::ContentBox`]: under the default border box the frame would come
+/// out of this figure before the tracks split what was left.
 ///
 /// Taffy resolves each of the `size` grid tracks by splitting the board's
 /// logical width evenly; done in physical pixels, "evenly" almost never
@@ -109,6 +114,12 @@ pub fn spawn_grid(
                         grid_template_rows: RepeatedGridTrack::flex(u16::from(size), 1.0),
                         width: board_side,
                         height: board_side,
+                        // [`board_side_px`] snaps the size the *cells* divide
+                        // up. The frame below would otherwise be subtracted
+                        // from it first, leaving the tracks a fractional width
+                        // to split and putting a stray pixel of backing
+                        // between some pairs of cells.
+                        box_sizing: BoxSizing::ContentBox,
                         border: UiRect::all(Val::Px(BOARD_BORDER_PX)),
                         border_radius: BorderRadius::all(Val::Px(6.0)),
                         ..default()
