@@ -72,10 +72,14 @@ gh run watch     # or: gh run list --workflow=ci.yml
 ```
 
 Confirm `build` is green on all three platforms (macOS, Linux, Windows)
-before moving on. The `release` job, which actually publishes a GitHub
-Release, stays gated on the tag itself, so this dry run cannot publish
-anything by accident. If `gh` isn't authenticated for Actions here, use the
-"Run workflow" button on the CI workflow's page instead.
+before moving on. (For a pull request that touches `packaging/` or the
+workflow itself, adding a `packaging` label runs the same job on the PR, so
+that class of mistake need not wait for release day at all.)
+
+The `release` job, which actually publishes a GitHub Release, stays gated on
+the tag itself, so this dry run cannot publish anything by accident. If `gh`
+isn't authenticated for Actions here, use the "Run workflow" button on the CI
+workflow's page instead.
 
 ## 5. Tag and push
 

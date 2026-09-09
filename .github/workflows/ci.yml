@@ -11,6 +11,10 @@ env:
   CARGO_TERM_COLOR: always
   # Bevy links a lot; keep incremental artefacts out of the cache.
   CARGO_INCREMENTAL: 0
+  # Nothing in CI is ever opened in a debugger, and debuginfo is most of the
+  # size of the cache three runners have to save and restore.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -55,6 +59,10 @@ jobs:
           # clippy runs with -D warnings; without this a single warning throws
           # away the whole Bevy dependency build along with it.
           cache-on-failure: true
+          # A Bevy-sized cache per OS per key already crowds the 10 GB repo
+          # limit; a pull request that also writes one evicts the caches every
+          # other job depends on. Pull requests restore, they do not save.
+          save-if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
 
       # One authority on lint is enough: the same warnings fire on every
       # platform, and running it three times only spends runner minutes.
@@ -81,6 +89,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
 
       # Every puzzle is checked for a unique solution, contiguous regions, a
       # stable rating and byte-identical regeneration from its seed. queens_cli
@@ -94,9 +103,22 @@ jobs:
     name: Build ${{ matrix.name }}
     # Release binaries are only ever consumed by a release. Building them on
     # every push costs three runners a full LTO compile for artefacts nobody
-    # downloads; the manual trigger is there to produce one on demand.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # downloads; the manual trigger is there to produce one on demand. A
+    # `packaging` label does the same for a pull request that touches this
+    # workflow or packaging/, so a mistake there fails on the change that
+    # caused it rather than at tag time.
+    if: >
+      startsWith(github.ref, 'refs/tags/v') ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'packaging')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # Signed provenance for each archive. Nothing about SmartScreen or
+      # Gatekeeper depends on this; it is what lets someone verify a download
+      # came from this workflow and this commit.
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -122,6 +144,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
 
       # Each runner builds for its own host, so no target flag: it would only
       # bury the binaries a directory deeper for nothing.
@@ -186,6 +209,11 @@ jobs:
           $binaries = "target/release/queens.exe", "target/release/queens-gen.exe"
           Compress-Archive -Path $binaries -DestinationPath "queens-${{ matrix.name }}.zip"
 
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: queens-${{ matrix.name }}.*
+
       - uses: actions/upload-artifact@v4
         with:
           name: queens-${{ matrix.name }}
@@ -206,6 +234,13 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # The Windows binaries are unsigned, so a cautious player has nothing to
+      # check them against otherwise. See README.md for what this does and does
+      # not buy.
+      - name: Checksum the artefacts
+        working-directory: artifacts
+        run: sha256sum queens-* > SHA256SUMS
 
       - name: Attach the binaries to the release
         env:

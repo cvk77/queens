@@ -1,0 +1,22 @@
+# Monthly rather than weekly: this is a small workspace with a pinned lockfile,
+# and a pull request per crate per week would be noise rather than signal.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+    groups:
+      # Bevy's crates move together; separate pull requests for each would
+      # never build.
+      bevy:
+        patterns: ["bevy*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
