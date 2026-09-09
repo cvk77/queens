@@ -11,12 +11,22 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 86 tests + 1 doctest
+cargo test --workspace                      # 117 tests + 1 doctest, 2 ignored
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
-cargo run -p queens_app                     # play
-cargo run -p queens_app --features dev      # dynamic linking, far faster rebuilds
+cargo play                                  # alias: run with dynamic linking
+cargo audit                                 # alias: the generator audit below
+cargo run -p queens_app                     # play, statically linked
 ```
+
+The two aliases live in `.cargo/config.toml`, which also points Windows at
+`rust-lld`. Measured here, a touch-one-file rebuild of the statically linked
+binary went from ~13s to ~9s on the linker alone, and to ~6s once the dev
+profile stopped emitting debuginfo for dependencies. `cargo play` is ~4s and is
+the normal way to run the game while working on it.
+
+The toolchain is pinned in `rust-toolchain.toml`, so CI and a development
+machine agree. Bumping it is the `channel` line; rustup fetches the rest.
 
 A release build of `queens_app` takes ~13 minutes (thin LTO, one codegen unit).
 Use a debug build unless you are producing artifacts.

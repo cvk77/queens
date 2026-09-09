@@ -297,6 +297,6 @@ and a misaligned table column.
   Mitigated by the background thread and the honest fallback rating, not solved.
 - **A sweep is one undo step per cell.** Dragging fifteen crosses takes fifteen
   undos to reverse. Defensible, but not obviously right.
-- **Tests run on Linux only in CI.** The logic is platform-independent and the
-  other three platforms are built but not tested, which trades a little coverage
-  for a lot of CI time.
+- **Lint and formatting run on Linux only in CI.** The tests run on all three
+  platforms, but the same clippy warnings fire on each, so checking three times
+  would only spend runner minutes.

@@ -152,8 +152,12 @@ cargo test -p queens_core --lib --release -- --ignored --nocapture lumpiness_swe
 
 | Path | What it is |
 |---|---|
-| `Cargo.toml` | Workspace: members, shared dependencies, dev and release profiles |
-| `.github/workflows/ci.yml` | Checks, the generator audit, a 4-platform binary matrix, tag releases; the macOS leg signs, notarizes and DMGs the game |
+| `Cargo.toml` | Workspace: members, shared dependencies, the `missing_docs` lint, dev and release profiles |
+| `.cargo/config.toml` | `rust-lld` as the Windows linker, and the `play` and `audit` aliases |
+| `rust-toolchain.toml` | The pinned toolchain, so CI and a development machine agree |
+| `.gitattributes` | LF endings, so a shell script edited on Windows still runs on macOS |
+| `.github/dependabot.yml` | Monthly cargo and actions updates, with Bevy grouped into one pull request |
+| `.github/workflows/ci.yml` | Checks, the generator audit, a 3-platform binary matrix, tag releases; the macOS leg signs, notarizes and DMGs the game |
 | `packaging/macos/` | `build_dmg.sh` (bundles, codesigns, DMGs and notarizes `queens.app`; ad-hoc-signs and skips notarization when run locally with no credentials), `Info.plist`, `AppIcon.icns` and the `generate_icon.py` that drew it |
 | `README.md` | The game, its rules, how to build and play |
 | `DESIGN.md` | Why the code is shaped this way |

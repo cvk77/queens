@@ -141,11 +141,12 @@ else, including saved games, stays on your machine.
 
 ## Building
 
-Needs Rust 1.95 or newer.
+Needs Rust 1.95 or newer. `rust-toolchain.toml` pins the exact toolchain the
+project is built and tested with, so rustup will fetch it for you.
 
 ```sh
 cargo run -p queens_app --release   # play
-cargo run -p queens_app --features dev   # much faster rebuilds while developing
+cargo play                          # much faster rebuilds while developing
 cargo test --workspace
 ```
 
@@ -156,8 +157,30 @@ sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev \
                      libxkbcommon-dev libwayland-dev
 ```
 
-Prebuilt binaries for Windows, Linux and macOS are attached to each release, and
-built for every push by `.github/workflows/ci.yml`.
+Prebuilt binaries for Windows, Linux and macOS are attached to each release by
+`.github/workflows/ci.yml`, which builds them for a version tag rather than for
+every push. Each release also carries a `SHA256SUMS` file:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+### Windows will warn you the first time
+
+Downloading the Windows build and running it gets you "Windows protected your
+PC" from Defender SmartScreen. Choose **More info**, then **Run anyway**.
+
+The binaries are not code-signed. Worth knowing before you assume signing would
+fix it: Microsoft's own documentation says a valid certificate does not remove
+that dialog either. SmartScreen goes by reputation, which a download builds up
+over weeks and hundreds of installs; a certificate makes that reputation carry
+from one release to the next, and puts a publisher name in the dialog instead of
+"Unknown publisher". It does not buy silence on release day. For a free puzzle
+game the certificate is not worth its yearly cost, so the checksums above are
+what is offered instead.
+
+The macOS build is a different story: it is signed and notarized, and opens
+without a prompt.
 
 ## The generator tool
 
