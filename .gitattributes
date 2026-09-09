@@ -1,0 +1,6 @@
+# Normalise line endings in the repository, whatever the checkout platform.
+* text=auto
+
+# The macOS release leg runs these through bash; a CRLF checked in from a
+# Windows machine breaks them at tag time, where it is most expensive to find.
+*.sh text eol=lf
