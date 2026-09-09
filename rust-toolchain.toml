@@ -1,0 +1,8 @@
+# Pinned so CI and a development machine agree. Without it CI takes whatever
+# the runner image happens to ship, and a toolchain bump breaks a build with no
+# commit to blame for it. Bumping it is the channel line below; rustup fetches
+# the toolchain on the next cargo command.
+[toolchain]
+channel = "1.96"
+profile = "minimal"
+components = ["clippy", "rustfmt", "rust-src"]
