@@ -48,17 +48,23 @@ pub const DISABLED: Color = Color::srgba(0.141, 0.157, 0.2, 0.55);
 pub const REGION_EDGE: Color = rgb(0x0E0F13);
 /// Faint separator between two cells of the same region.
 pub const CELL_EDGE: Color = Color::srgba(0.08, 0.09, 0.11, 0.28);
+
 /// The queen token, which sits on top of whatever colour its region is: a dark
-/// disc, so the crown inside it reads the same against every region colour.
+/// tile, so the crown stamped on it reads the same against every region
+/// colour.
 pub const QUEEN_BODY: Color = rgb(0x0E0F13);
 pub const QUEEN_RING: Color = rgb(0xF6F7FB);
-/// The crown drawn inside the disc, and the gem set into its band.
 pub const QUEEN_CROWN: Color = rgb(0xFBFCFE);
 pub const QUEEN_GEM: Color = rgb(0xFFC233);
+
 /// The player's "no queen here" cross. Opaque, and deliberately softer than
 /// the queen's near-black: the two strokes overlap, and a translucent colour
 /// would blend with itself and leave a dark patch at the crossing.
 pub const CROSS: Color = rgb(0x333A4B);
+
+/// The main menu's oversized "Queens": cream rather than the UI's flat white.
+pub const LOGO_INK: Color = rgb(0xF3E6C4);
+pub const LOGO_SHADOW: Color = rgb(0x2B4C86);
 
 /// Region colours: bold and saturated rather than pastel, but light enough
 /// that the dark queen token and cross stay legible on every one of them.
@@ -166,6 +172,8 @@ pub const GRID: f32 = 8.0;
 /// comfortably allows, because the name of the game is not a label, it is the
 /// first thing on screen.
 const SIZE_HERO: f32 = 84.0;
+/// How far the hero logo's shadow copy sits from its letters.
+const HERO_SHADOW_OFFSET: f32 = 5.0;
 /// A screen's own name, and the handful of overlay moments that stand in for
 /// one (paused, solved, building a puzzle).
 const SIZE_TITLE: f32 = 46.0;
@@ -215,22 +223,38 @@ pub fn numeric(content: impl Into<String>, size: f32, color: Color) -> impl Bund
 }
 
 /// The brand headline: "QUEENS" on the main menu, and nothing else.
+///
+/// Drawn twice — a navy copy behind, offset down and right, under a cream
+/// copy in front — for the hard, unblurred shadow a printed board-game box
+/// gets from a second ink pass rather than from light.
 pub fn hero(content: impl Into<String>) -> impl Bundle {
+    let content = content.into().to_uppercase();
+    let hero_font = || TextFont {
+        font_size: FontSize::Px(SIZE_HERO),
+        weight: FontWeight::BOLD,
+        ..default()
+    };
     (
-        text_with(
-            content.into().to_uppercase(),
-            TextFont {
-                font_size: FontSize::Px(SIZE_HERO),
-                weight: FontWeight::BOLD,
-                ..default()
-            },
-            TEXT,
-        ),
-        LetterSpacing::Px(0.5),
         Node {
             margin: UiRect::bottom(Val::Px(GRID)),
             ..default()
         },
+        children![
+            (
+                text_with(content.clone(), hero_font(), LOGO_SHADOW),
+                LetterSpacing::Px(0.5),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(HERO_SHADOW_OFFSET),
+                    top: Val::Px(HERO_SHADOW_OFFSET),
+                    ..default()
+                },
+            ),
+            (
+                text_with(content, hero_font(), LOGO_INK),
+                LetterSpacing::Px(0.5)
+            ),
+        ],
     )
 }
 
