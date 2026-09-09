@@ -1,0 +1,16 @@
+# Bevy produces a very large binary, and linking it dominates every rebuild
+# that does not use the `dev` feature's dynamic linking. rust-lld ships inside
+# the toolchain, so this costs no install on a dev machine or a CI runner.
+# Linux already defaults to rust-lld; macOS keeps ld-prime, which is faster
+# than anything worth installing in its place.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+# Without this, cargo doc and the doctests keep using link.exe.
+rustdocflags = ["-Clinker=rust-lld.exe"]
+
+[alias]
+# The dev profile is only bearable with dynamic linking, so make the fast path
+# the short one.
+play = "run -p queens_app --features dev"
+# The generator audit from CLAUDE.md's "Verifying changes".
+audit = "run -p queens_cli --release -- bench --sizes 5-12 --difficulties all --count 20"

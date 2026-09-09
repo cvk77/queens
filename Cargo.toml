@@ -29,6 +29,16 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+# No dependency here is ever stepped through in a debugger, and its debuginfo
+# is most of both the link time and the size of target/. Our own crates keep
+# theirs.
+debug = false
+
+# Proc macros and build scripts are compiled once and then run on every crate
+# that uses them; optimise them and skip their debuginfo too.
+[profile.dev.build-override]
+opt-level = 3
+debug = false
 
 [profile.release]
 lto = "thin"
