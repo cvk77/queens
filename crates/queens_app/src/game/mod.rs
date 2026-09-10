@@ -8,6 +8,7 @@ mod interaction;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
+use crate::audio::Sound;
 use crate::persistence::{InProgress, SaveData};
 use crate::session::{PuzzleRequest, Session};
 use crate::states::{AppState, PlayState};
@@ -34,7 +35,10 @@ impl Plugin for GamePlugin {
                 (spawn_pause_overlay, board::refresh_board),
             )
             .add_systems(OnExit(PlayState::Paused), board::refresh_board)
-            .add_systems(OnEnter(PlayState::Won), (record_win, spawn_victory_overlay))
+            .add_systems(
+                OnEnter(PlayState::Won),
+                (record_win, spawn_victory_overlay, sound_the_fanfare),
+            )
             .add_systems(
                 Update,
                 (
@@ -149,6 +153,12 @@ fn record_win(session: Res<Session>, mut save: ResMut<SaveData>) {
         session.hints_used,
     );
     save.in_progress = None;
+}
+
+/// The one cue the game plays that the player did not just ask for by
+/// marking a cell.
+fn sound_the_fanfare(mut sounds: MessageWriter<Sound>) {
+    sounds.write(Sound::Victory);
 }
 
 // --- overlays --------------------------------------------------------------

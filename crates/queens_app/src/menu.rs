@@ -932,6 +932,7 @@ fn stats_row(cells: [&str; 5]) -> impl Bundle {
 enum Toggle {
     AutoCross,
     Colourblind,
+    Sound,
 }
 
 fn spawn_settings(mut commands: Commands) {
@@ -952,6 +953,12 @@ fn spawn_settings(mut commands: Commands) {
                     Toggle::Colourblind,
                     "Colourblind",
                     "Use region colours chosen to stay separable.",
+                );
+                spawn_toggle(
+                    panel,
+                    Toggle::Sound,
+                    "Sound",
+                    "Play a cue as you mark the board, and on a solve.",
                 );
             });
 
@@ -982,6 +989,9 @@ fn spawn_toggle(panel: &mut ChildSpawnerCommands, toggle: Toggle, label: &str, d
                     Toggle::Colourblind => {
                         save.settings.colourblind = !save.settings.colourblind;
                     }
+                    Toggle::Sound => {
+                        save.settings.sound = !save.settings.sound;
+                    }
                 },
             );
         });
@@ -997,6 +1007,7 @@ fn highlight_toggles(
         let on = match toggle {
             Toggle::AutoCross => save.settings.auto_cross,
             Toggle::Colourblind => save.settings.colourblind,
+            Toggle::Sound => save.settings.sound,
         };
         let base = selected_tint(on);
         if tint.base != base {
@@ -1006,6 +1017,7 @@ fn highlight_toggles(
         let name = match toggle {
             Toggle::AutoCross => "Auto-cross",
             Toggle::Colourblind => "Colourblind",
+            Toggle::Sound => "Sound",
         };
         let wanted = format!("{name}: {}", if on { "on" } else { "off" });
         for &child in children {

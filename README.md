@@ -130,6 +130,9 @@ for the puzzle you just finished.
   it. Lift that queen again and its crosses go with it; the ones you made
   yourself stay.
 - **Colour-blind palette** swaps in region colours chosen to stay separable.
+- **Sound** plays a short cue as you mark the board — a tick for a cross, a
+  brighter one for a queen, a falling one for a mark you take off again — and a
+  fanfare when the board comes out. Off, the game is silent.
 
 ## Update check
 
@@ -194,7 +197,7 @@ trunk serve --release --open   # play it locally
 trunk build --release          # dist/ is what itch.io wants, zipped
 ```
 
-The bundle is about 18 MB, or 5.7 MB over the wire once the server compresses
+The bundle is about 20 MB, or 6.3 MB over the wire once the server compresses
 it. Give it a viewport of at least 840x700: below that the board header wraps
 at 12x12, and the How to Play screen loses its Back and Next buttons.
 

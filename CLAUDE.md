@@ -11,7 +11,7 @@ design is what it is; [README.md](README.md) covers the rules and controls.
 ## Commands
 
 ```sh
-cargo test --workspace                      # 117 tests + 1 doctest, 2 ignored
+cargo test --workspace                      # 125 tests + 1 doctest, 2 ignored
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo play                                  # alias: run with dynamic linking
@@ -143,10 +143,35 @@ errors, not a clear message. The list lives in `index.html`'s
 `data-wasm-opt-params`. Check it against `rustc --target wasm32-unknown-unknown
 --print target-features` after a toolchain bump.
 
+**A browser will not let the page make a sound until it has been clicked.**
+cpal builds the `AudioContext` while Bevy is starting up, so it is created
+suspended and the `resume()` cpal makes there is refused; Chrome does not
+resume it later of its own accord (verified over the DevTools protocol: still
+`suspended` after a click, with "The AudioContext was not allowed to start" in
+the console). Nothing in Rust can reach that context, so `index.html` wraps the
+`AudioContext` constructor, remembers what the page builds and resumes them on
+the first pointer, key or touch event. That script is the first place to look
+if the browser build goes quiet; the desktop build can tell you nothing about
+it.
+
 **Testing the web build in a hidden or backgrounded tab will mislead you.**
 Chrome throttles `requestAnimationFrame` to zero there, and Bevy's loop runs on
 it, so the clock stops, animations freeze and the autosave timer never fires.
 None of that is a bug. Use a real, visible window.
+
+## Sound
+
+Four WAV files in `crates/queens_app/assets/sounds/`, `include_bytes!`d by
+`audio.rs`. `bevy/wav` is the only decoder built, so a replacement has to be a
+PCM WAV — and Bevy builds rodio's decoder with an `unwrap()` inside, so a file
+it cannot read panics the first time that cue plays, not at startup.
+`every_cue_decodes_to_audible_samples` is what turns that into a failing test
+instead of a crash in someone's game.
+
+Nothing plays a cue directly: write a `Sound` message and let `audio.rs` decide.
+The settings toggle, the volume balance between four recordings made at
+different levels, and the 45ms floor that keeps a drag-sweep ticking rather
+than buzzing all live there, and only there.
 
 ## Conventions
 

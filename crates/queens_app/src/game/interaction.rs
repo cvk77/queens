@@ -4,6 +4,7 @@ use bevy::input::keyboard::Key;
 use bevy::prelude::*;
 use queens_core::{Coord, Mark};
 
+use crate::audio::Sound;
 use crate::persistence::SaveData;
 use crate::session::Session;
 use crate::states::PlayState;
@@ -146,7 +147,13 @@ impl PaintStroke {
 
 /// Left click cycles empty → cross → queen; right click drops or lifts a queen
 /// directly, which is quicker once the crosses are in.
-fn mark_clicked(session: &mut Session, coord: Coord, button: PointerButton, auto_cross: bool) {
+fn mark_clicked(
+    session: &mut Session,
+    sounds: &mut MessageWriter<Sound>,
+    coord: Coord,
+    button: PointerButton,
+    auto_cross: bool,
+) {
     let current = session.board.get(coord);
     let next = match button {
         PointerButton::Secondary => {
@@ -158,6 +165,9 @@ fn mark_clicked(session: &mut Session, coord: Coord, button: PointerButton, auto
         }
         _ => current.cycled(),
     };
+    if let Some(sound) = Sound::for_change(current, next) {
+        sounds.write(sound);
+    }
     session.set_mark(coord, next, auto_cross);
 }
 
@@ -169,6 +179,7 @@ pub fn on_cell_click(
     save: Res<SaveData>,
     mut stroke: ResMut<PaintStroke>,
     mut session: ResMut<Session>,
+    mut sounds: MessageWriter<Sound>,
 ) {
     if *play_state.get() != PlayState::Active {
         return;
@@ -183,6 +194,7 @@ pub fn on_cell_click(
 
     mark_clicked(
         &mut session,
+        &mut sounds,
         cell.coord,
         click.button,
         save.settings.auto_cross,
@@ -222,6 +234,7 @@ pub fn on_cell_drag_enter(
     play_state: Res<State<PlayState>>,
     mut stroke: ResMut<PaintStroke>,
     mut session: ResMut<Session>,
+    mut sounds: MessageWriter<Sound>,
 ) {
     if *play_state.get() != PlayState::Active {
         return;
@@ -243,9 +256,15 @@ pub fn on_cell_drag_enter(
         let Ok(cell) = cells.get(entity) else {
             continue;
         };
+        let current = session.board.get(cell.coord);
         // Never let a sweep disturb a queen the player put down deliberately.
-        if session.board.get(cell.coord) == Mark::Queen {
+        if current == Mark::Queen {
             continue;
+        }
+        // One cue per cell the sweep actually changes. Thinning that run to a
+        // tick rate is `audio.rs`'s business, not this loop's.
+        if let Some(sound) = Sound::for_change(current, paint.mark) {
+            sounds.write(sound);
         }
         // A sweep only lays or clears crosses, so auto-cross has no part in it.
         session.set_mark(cell.coord, paint.mark, false);
@@ -263,6 +282,7 @@ pub fn on_cell_drag_end(
     save: Res<SaveData>,
     mut stroke: ResMut<PaintStroke>,
     mut session: ResMut<Session>,
+    mut sounds: MessageWriter<Sound>,
 ) {
     // Always end the stroke, whatever the state of play, so nothing of this
     // gesture is left to confuse the next one.
@@ -278,6 +298,7 @@ pub fn on_cell_drag_end(
 
     mark_clicked(
         &mut session,
+        &mut sounds,
         cell.coord,
         drag.button,
         save.settings.auto_cross,

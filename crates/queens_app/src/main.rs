@@ -9,6 +9,7 @@
 // fires on ordinary, idiomatic queries.
 #![allow(clippy::type_complexity)]
 
+mod audio;
 mod capture;
 mod game;
 mod generation;
@@ -52,6 +53,7 @@ fn main() -> AppExit {
         .add_sub_state::<HowToPlayPage>()
         .add_plugins((
             theme::ThemePlugin,
+            audio::SoundPlugin,
             capture::CapturePlugin,
             persistence::PersistencePlugin,
             generation::GenerationPlugin,

@@ -192,6 +192,34 @@ remaining queen still rules out. It is one click, so it is one undo step. The
 provenance flags travel in the snapshots and in the save file, so undo and resume
 both keep working.
 
+## Sound says what happened, and says it once
+
+Four short recordings, one per thing that can happen to a cell — a tick for a
+cross, a brighter one for a queen, a falling one for a mark coming off — and a
+fanfare for a solved board. They are `include_bytes!`d in, like the font: the
+game has no asset pipeline, and an `assets/` directory would have to be carried
+into the macOS bundle, the release archives and the trunk build before a single
+cue played. Only the `wav` decoder is compiled in, because that is what these
+four files are.
+
+Nothing plays a cue where it happens. A click, a drag that ended as a click, a
+sweep and a solve all write a `Sound` message instead, and one system decides
+what reaches the speakers. That is what keeps the settings toggle, the balance
+between four recordings made at different levels, and the rate limit in one
+place rather than at four call sites that each know a little of it.
+
+The rate limit is the reason it is worth the indirection. A sweep marks a cell
+every frame or two, and it hands back the cell it started on together with the
+one it reached, so several cells can change in a single frame. A cue per cell
+is not a run of ticks, it is a buzz. Cues from the board are floored at 45ms
+apart, which is slower than a sweep and faster than anything a player does on
+purpose.
+
+What stays silent is as deliberate: undo, redo, reset, hints and every menu.
+Undo and reset change a swathe of cells at once, so there is no one thing that
+just happened for a cue to name. A sound here always means the board changed
+under your hand.
+
 ## Rendering
 
 The board is a `Display::Grid` of `Node` entities — one per cell — rather than
@@ -311,6 +339,17 @@ scale without a renderer, and a clock shim does not touch that. It was needed
 because `SystemTime::now()` *panics* on this target rather than failing to
 compile, so the alternative was a runtime crash on the first randomly seeded
 game.
+
+Sound is the one thing the page has to solve rather than the crate. A browser
+will not let a page make a sound until it has been interacted with, and cpal
+builds the game's `AudioContext` while Bevy is starting up — so it is created
+suspended, the `resume()` cpal makes there is refused, and Chrome never revisits
+that decision on its own. Nothing on the Rust side can reach that context; it
+belongs to cpal, several layers under `bevy_audio`. So `index.html` remembers
+every context the page constructs and resumes them on the first gesture. It is
+the only place in this project where behaviour lives in the page rather than in
+the game, and it is there because that is the only place with a handle on the
+problem.
 
 ## Known trade-offs
 

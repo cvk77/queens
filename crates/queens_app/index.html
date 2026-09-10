@@ -25,6 +25,58 @@
       data-wasm-opt-params="--enable-bulk-memory --enable-bulk-memory-opt --enable-multivalue --enable-mutable-globals --enable-nontrapping-float-to-int --enable-reference-types --enable-sign-ext"
     />
 
+    <script>
+      // A browser will not let a page make a sound until the page has been
+      // interacted with. cpal builds the game's AudioContext while Bevy is
+      // starting up, long before anyone has clicked, so it is created
+      // suspended -- and it calls resume() only there, at startup, where the
+      // call is refused. Chrome does not resume it later of its own accord
+      // (verified: the context is still suspended after a click), so without
+      // this the game is silent for the whole session.
+      //
+      // Nothing on the Rust side can reach that context: it belongs to cpal,
+      // several layers under bevy_audio. So it is caught here instead, by
+      // remembering every context the page constructs and resuming them on
+      // the first real gesture.
+      (() => {
+        const contexts = [];
+        for (const name of ["AudioContext", "webkitAudioContext"]) {
+          const Original = window[name];
+          if (!Original) continue;
+          const Remembering = function (...args) {
+            const context = new Original(...args);
+            contexts.push(context);
+            return context;
+          };
+          Remembering.prototype = Original.prototype;
+          window[name] = Remembering;
+        }
+
+        const gestures = ["pointerdown", "keydown", "touchend"];
+        const stopListening = () => {
+          for (const gesture of gestures) {
+            window.removeEventListener(gesture, resume, true);
+          }
+        };
+        function resume() {
+          let suspended = false;
+          for (const context of contexts) {
+            if (context.state === "suspended") {
+              suspended = true;
+              context.resume().catch(() => {});
+            }
+          }
+          // Keep listening until there is a context and it is running: the
+          // wasm takes seconds to arrive, and the first click of all may land
+          // before there is anything to resume.
+          if (contexts.length > 0 && !suspended) stopListening();
+        }
+        for (const gesture of gestures) {
+          window.addEventListener(gesture, resume, true);
+        }
+      })();
+    </script>
+
     <style>
       /* theme::BACKGROUND, painted here as well as by the game so the page
          does not flash white while the wasm downloads. */

@@ -19,13 +19,17 @@ missing_docs = "warn"
 [workspace.dependencies]
 queens_core = { path = "crates/queens_core" }
 # Default features pull in the whole 3D pipeline (bevy_pbr, bevy_gltf, KTX2,
-# morph animation) and the audio engine, none of which this 2D UI game
-# reaches; dropping them cuts the release binary by about a fifth.
+# morph animation), none of which this 2D UI game reaches; dropping them cuts
+# the release binary by about a fifth.
 # `system_clipboard` is off by default, and without it `Clipboard` writes to an
 # in-process buffer the rest of the desktop never sees.
+# `wav` is the only decoder built: the four cues in `audio.rs` are short enough
+# that a compressed format would cost more in decoder than it saved in bytes.
 bevy = { version = "0.19.1", default-features = false, features = [
     "ui",
     "system_clipboard",
+    "bevy_audio",
+    "wav",
 ] }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"

@@ -1,6 +1,6 @@
 # Inventory
 
-A map of the codebase: 25 source files, ~10,200 lines, three crates. Start with
+A map of the codebase: 26 source files, ~10,750 lines, three crates. Start with
 the task index, then the per-file notes.
 
 ## Where to look
@@ -19,6 +19,7 @@ the task index, then the per-file notes.
 | Colours, the embedded font, type scale, buttons, panels | `queens_app/src/theme.rs` |
 | Board drawing, cell borders, the queen crown, the hint pulse | `queens_app/src/game/board.rs` |
 | Clicks, drags, keyboard shortcuts | `queens_app/src/game/interaction.rs` |
+| The sounds, and when each one plays | `queens_app/src/audio.rs` |
 | Undo, auto-cross, hint requests, the hint tally | `queens_app/src/session.rs` |
 | Top bar, toolbar, timer, hint line | `queens_app/src/game/hud.rs` |
 | Pause / victory overlays, win detection, autosave | `queens_app/src/game/mod.rs` |
@@ -75,24 +76,25 @@ regeneration from its seed.
 
 ## `queens_app` — the game
 
-49 tests.
+55 tests.
 
 | File | Lines | What is in it |
 |---|---|---|
-| `main.rs` | 73 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
+| `main.rs` | 89 | `App` setup, plugin registration, the camera, idle-redraw `WinitSettings`, `#![allow(clippy::type_complexity)]` |
 | `states.rs` | 51 | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings, HowToPlay), `PlayState` sub-state (Active, Paused, Won) and `HowToPlayPage` sub-state (Goal, Touching, Controls, Hints) |
-| `theme.rs` | 523 | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
+| `theme.rs` | 551 | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
 | `session.rs` | 450 | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
-| `persistence.rs` | 288 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
+| `persistence.rs` | 364 | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | 142 | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, pulses the loading dots |
-| `menu.rs` | 1209 | Main menu (with the version and copyright line, and an update notice above it when one is available, all pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
-| `howto.rs` | 448 | The How to Play screen: four pages (Goal, No Touching, Controls, Hints and Difficulty) paginated by `HowToPlayPage`, each illustrated with a hand-drawn demo board built from `board::queen_token`/`cross_token` rather than a real `Puzzle` |
-| `game/mod.rs` | 270 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
-| `game/board.rs` | 473 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline; `queen_token`/`cross_token` are the always-shown variants `howto.rs` reuses for its example boards |
+| `menu.rs` | 1225 | Main menu (with the version and copyright line, and an update notice above it when one is available, all pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
+| `howto.rs` | 479 | The How to Play screen: four pages (Goal, No Touching, Controls, Hints and Difficulty) paginated by `HowToPlayPage`, each illustrated with a hand-drawn demo board built from `board::queen_token`/`cross_token` rather than a real `Puzzle` |
+| `game/mod.rs` | 314 | `GamePlugin`, screen layout, clock, win detection, autosave, pause and victory overlays |
+| `game/board.rs` | 538 | The grid, its row and column rulers, cell borders, the node-drawn queen and crown, `refresh_board`, the hint's breathing outline; `queen_token`/`cross_token` are the always-shown variants `howto.rs` reuses for its example boards |
 | `game/hud.rs` | 401 | Top bar (size, difficulty, share-code-that-copies, clock, counter), the fixed-height message line and toolbar; `refresh_hud` |
-| `game/interaction.rs` | 564 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts matched by the character a key produces (`letter_just_pressed`) rather than its physical position, and the platform's own modifier (`MODIFIER`: Command on macOS, Control elsewhere) |
+| `game/interaction.rs` | 585 | `PaintStroke` and its sweep threshold, the click/drag observers, keyboard shortcuts matched by the character a key produces (`letter_just_pressed`) rather than its physical position, and the platform's own modifier (`MODIFIER`: Command on macOS, Control elsewhere) |
 | `capture.rs` | 725 | The scripted run: screenshots every screen (including each How to Play page and a faked update notice) and asserts real pointer gestures |
-| `update_check.rs` | 138 | `UpdateCheckPlugin`: a once-at-startup, best-effort GitHub check for a newer release, run on `AsyncComputeTaskPool`; `LatestRelease` is `None` unless one is found |
+| `audio.rs` | 267 | The four embedded WAV cues, the `Sound` message the rest of the game writes, the settings gate and the retrigger floor that keeps a sweep ticking rather than buzzing |
+| `update_check.rs` | 154 | `UpdateCheckPlugin`: a once-at-startup, best-effort GitHub check for a newer release, run on `AsyncComputeTaskPool`; `LatestRelease` is `None` unless one is found |
 
 ### How a game starts
 
@@ -116,6 +118,7 @@ automatic.
 | `PuzzleRequest` | `session.rs` | From the moment a game is asked for |
 | `Session` | `session.rs` | Only during `Playing` — gate systems on `resource_exists::<Session>` |
 | `PaintStroke` | `game/interaction.rs` | Always |
+| `Cues` | `audio.rs` | Always, from the first frame |
 | `SeedInput` | `menu.rs` | Always |
 | `ShareCodeInput` | `menu.rs` | Always |
 | `FocusedField` | `menu.rs` | Always |
@@ -137,6 +140,7 @@ automatic.
 | `queens_app/src/persistence.rs` | 2 | Hints accumulating on a solve, and older saves still loading |
 | `queens_app/src/menu.rs` | 16 | Seed and share code field parsing, their character caps, focus keeping keystrokes out of the wrong field, settings syncing to a started share code, the copyright line staying ASCII |
 | `queens_app/src/game/hud.rs` | 1 | The wordiest hint fitting the message slot |
+| `queens_app/src/audio.rs` | 6 | Every embedded cue decoding, which mark makes which sound, and a sweep ticking rather than buzzing |
 | `queens_app/src/theme.rs` | 2 | Every region colour having a distinct ASCII name |
 | `queens_app/src/update_check.rs` | 6 | Version comparison: patch/minor ordering, equal and older versions, and unparseable or non-triple tags never counting as newer |
 
@@ -157,7 +161,8 @@ cargo test -p queens_core --lib --release -- --ignored --nocapture lumpiness_swe
 | `rust-toolchain.toml` | The pinned toolchain, so CI and a development machine agree |
 | `.gitattributes` | LF endings, so a shell script edited on Windows still runs on macOS |
 | `.github/dependabot.yml` | Monthly cargo and actions updates, with Bevy grouped into one pull request |
-| `crates/queens_app/index.html` | The web build's page: the canvas the game draws into, and the wasm-opt feature flags it will not build without |
+| `crates/queens_app/assets/` | The font and the four WAV cues. Nothing is loaded at runtime: every one of them is `include_bytes!`d into the binary, so the game ships as one executable and the web build as one wasm |
+| `crates/queens_app/index.html` | The web build's page: the canvas the game draws into, the wasm-opt feature flags it will not build without, and the script that resumes the audio context a browser starts suspended |
 | `crates/queens_app/Trunk.toml` | `trunk build --release` settings; its `dist/` is the itch.io upload |
 | `.github/workflows/ci.yml` | Checks, the generator audit, a 3-platform binary matrix, tag releases; the macOS leg signs, notarizes and DMGs the game |
 | `packaging/macos/` | `build_dmg.sh` (bundles, codesigns, DMGs and notarizes `queens.app`; ad-hoc-signs and skips notarization when run locally with no credentials), `Info.plist`, `AppIcon.icns` and the `generate_icon.py` that drew it |

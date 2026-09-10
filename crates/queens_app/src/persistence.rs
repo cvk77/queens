@@ -37,6 +37,19 @@ pub struct Settings {
     pub auto_cross: bool,
     /// Swap in the colour-blind-safe region palette.
     pub colourblind: bool,
+    /// Play the marking and victory cues.
+    ///
+    /// Defaulted rather than versioned, so a save written before there was
+    /// anything to hear still loads — and defaulted to on, because silence is
+    /// not a preference such a save ever expressed.
+    #[serde(default = "sound_on")]
+    pub sound: bool,
+}
+
+/// Sound is on unless a save says otherwise, which `bool`'s own default
+/// cannot express.
+fn sound_on() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -46,6 +59,7 @@ impl Default for Settings {
             difficulty: Difficulty::Medium,
             auto_cross: true,
             colourblind: false,
+            sound: sound_on(),
         }
     }
 }
@@ -343,5 +357,8 @@ mod tests {
         assert_eq!(easy.solved, 2);
         assert_eq!(easy.hints_used, 0);
         assert_eq!(save.in_progress.expect("resume slot").hints_used, 0);
+        // A save written before there was anything to hear is not a save that
+        // asked for silence.
+        assert!(save.settings.sound);
     }
 }
