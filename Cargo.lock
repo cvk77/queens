@@ -4308,7 +4308,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "queens_app"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "bevy",
  "dirs",
@@ -4321,14 +4321,14 @@ dependencies = [
 
 [[package]]
 name = "queens_cli"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "queens_core",
 ]
 
 [[package]]
 name = "queens_core"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "serde",
  "web-time",
