@@ -439,8 +439,6 @@ pub fn next_hint(puzzle: &Puzzle, state: &BoardState, names: RegionNames<'_>) ->
     for queen in state.queens() {
         grid.place(queen);
     }
-    // Take the player's crosses as read, so the rules pick up where they left
-    // off instead of re-deriving what is already on the board.
     let crossed: Vec<Coord> = crosses().collect();
     grid.eliminate(&crossed);
     debug_assert!(
@@ -1402,7 +1400,6 @@ mod tests {
 
         let puzzle = generate(PuzzleSeed::new(9, Difficulty::Hard, 99));
         let mut state = BoardState::new(puzzle.size());
-        // Cross off every cell that is not part of the solution.
         for cell in puzzle.cells() {
             if !puzzle.is_solution_cell(cell) {
                 state.set(cell, Mark::Cross);

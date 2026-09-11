@@ -193,14 +193,10 @@ mod tests {
 
     #[test]
     fn reports_zero_for_an_unsolvable_layout() {
-        // Four vertical regions on a 4-wide board: the only column permutations
-        // avoiding adjacency are 2-4-1-3 and 3-1-4-2, and vertical regions make
-        // region == column, which those satisfy. Use a layout that instead
-        // forces two queens into one region.
-        let rows = ["AAAA", "AAAA", "BBCC", "BBCC"];
-        let (size, regions) = ascii_regions(&rows);
         // Only three regions exist for four rows, so no solution can use one
         // queen per region.
+        let rows = ["AAAA", "AAAA", "BBCC", "BBCC"];
+        let (size, regions) = ascii_regions(&rows);
         assert_eq!(count_solutions(size, &regions, 5), 0);
     }
 

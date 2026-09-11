@@ -114,11 +114,8 @@ pub fn spawn_grid(
                         grid_template_rows: RepeatedGridTrack::flex(u16::from(size), 1.0),
                         width: board_side,
                         height: board_side,
-                        // [`board_side_px`] snaps the size the *cells* divide
-                        // up. The frame below would otherwise be subtracted
-                        // from it first, leaving the tracks a fractional width
-                        // to split and putting a stray pixel of backing
-                        // between some pairs of cells.
+                        // Content box: see [`board_side_px`] for why the
+                        // border must not be subtracted from this size.
                         box_sizing: BoxSizing::ContentBox,
                         border: UiRect::all(Val::Px(BOARD_BORDER_PX)),
                         border_radius: BorderRadius::all(Val::Px(6.0)),

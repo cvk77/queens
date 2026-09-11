@@ -1138,14 +1138,9 @@ mod tests {
         assert_eq!(typed.text.len(), MAX_SHARE_CODE_LEN, "capped");
     }
 
-    /// The two fields used to be driven by two systems that both watched
-    /// every digit key, gated only by whether a code had *already* fully
-    /// decoded. Typing a digit that completed a code (the last key of "5E1")
-    /// landed in both fields on the same frame, since the seed field's system
-    /// still saw the pre-keystroke, not-yet-decoded state: the size digit and
-    /// the seed digit both leaked in, turning a seed of `1` into `51`. Real
-    /// focus, checked by both systems before either touches its own field,
-    /// removes the shared state that raced.
+    /// Both systems check focus before touching their own field, so a digit
+    /// that completes a share code on the same frame it is typed cannot also
+    /// leak into the seed field.
     #[test]
     fn typing_a_share_code_never_touches_the_seed_field() {
         use bevy::ecs::system::RunSystemOnce;
