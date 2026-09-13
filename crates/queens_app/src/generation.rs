@@ -49,12 +49,15 @@ fn spawn_screen(mut commands: Commands, request: Res<PuzzleRequest>) {
     commands.spawn((
         theme::screen(DespawnOnExit(AppState::Generating)),
         children![(
-            theme::panel(),
-            children![
-                theme::title("Building a puzzle"),
-                loading_dots(),
-                theme::subtitle(format!("{0}x{0}   {1}", seed.size, seed.difficulty)),
-            ],
+            theme::screen_content(),
+            children![(
+                theme::panel(),
+                children![
+                    theme::title("Building a puzzle"),
+                    loading_dots(),
+                    theme::subtitle(format!("{0}x{0}   {1}", seed.size, seed.difficulty)),
+                ],
+            )],
         )],
     ));
 }

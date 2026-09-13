@@ -58,60 +58,71 @@ fn spawn_main_menu(mut commands: Commands, save: Res<SaveData>, latest: Res<Late
     commands
         .spawn(theme::screen(DespawnOnExit(AppState::MainMenu)))
         .with_children(|screen| {
-            screen.spawn(theme::hero("Queens"));
-
-            // Plain column, not `theme::panel()`: four buttons need no card
-            // to read as a group, and a card here would draw a border round
-            // the first thing the player sees.
             screen
-                .spawn(Node {
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    row_gap: Val::Px(theme::GRID * 2.0),
-                    ..default()
-                })
-                .with_children(|panel| {
-                    if let Some(saved) = resumable {
-                        let label = format!(
-                            "Continue - {0}x{0} {1}",
-                            saved.seed.size, saved.seed.difficulty
-                        );
-                        panel.spawn(theme::accent_button(&label)).observe(
-                        move |_click: On<Pointer<Click>>,
-                              mut commands: Commands,
-                              mut next: ResMut<NextState<AppState>>| {
-                            commands.insert_resource(PuzzleRequest::resume(&saved));
-                            next.set(AppState::Generating);
-                        },
-                    );
-                    }
+                .spawn(theme::screen_content())
+                .with_children(|screen| {
+                    screen.spawn(theme::hero("Queens"));
 
-                    panel
-                        .spawn(theme::menu_button("New Game"))
-                        .observe(go_to(AppState::NewGame));
-                    panel
-                        .spawn(theme::menu_button("How to Play"))
-                        .observe(go_to(AppState::HowToPlay));
-                    panel
-                        .spawn(theme::menu_button("Statistics"))
-                        .observe(go_to(AppState::Stats));
-                    panel
-                        .spawn(theme::menu_button("Settings"))
-                        .observe(go_to(AppState::Settings));
-                    // A browser tab is closed by the browser, and quitting the
-                    // app there would only leave the player looking at a dead
-                    // canvas with no way back.
-                    #[cfg(not(target_arch = "wasm32"))]
-                    panel.spawn(theme::menu_button("Quit")).observe(
-                        |_click: On<Pointer<Click>>,
-                         save: Res<SaveData>,
-                         mut exit: MessageWriter<AppExit>| {
-                            crate::persistence::flush(&save);
-                            exit.write(AppExit::Success);
-                        },
-                    );
+                    // Plain column, not `theme::panel()`: four buttons need no
+                    // card to read as a group, and a card here would draw a
+                    // border round the first thing the player sees.
+                    screen
+                        .spawn(Node {
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            row_gap: Val::Px(theme::GRID * 2.0),
+                            ..default()
+                        })
+                        .with_children(|panel| {
+                            if let Some(saved) = resumable {
+                                let label = format!(
+                                    "Continue - {0}x{0} {1}",
+                                    saved.seed.size, saved.seed.difficulty
+                                );
+                                panel.spawn(theme::accent_button(&label)).observe(
+                                move |_click: On<Pointer<Click>>,
+                                      mut commands: Commands,
+                                      mut next: ResMut<NextState<AppState>>| {
+                                    commands.insert_resource(PuzzleRequest::resume(&saved));
+                                    next.set(AppState::Generating);
+                                },
+                            );
+                            }
+
+                            panel
+                                .spawn(theme::menu_button("New Game"))
+                                .observe(go_to(AppState::NewGame));
+                            panel
+                                .spawn(theme::menu_button("How to Play"))
+                                .observe(go_to(AppState::HowToPlay));
+                            panel
+                                .spawn(theme::menu_button("Statistics"))
+                                .observe(go_to(AppState::Stats));
+                            panel
+                                .spawn(theme::menu_button("Settings"))
+                                .observe(go_to(AppState::Settings));
+                            // A browser tab is closed by the browser, and
+                            // quitting the app there would only leave the
+                            // player looking at a dead canvas with no way
+                            // back.
+                            #[cfg(not(target_arch = "wasm32"))]
+                            panel.spawn(theme::menu_button("Quit")).observe(
+                                |_click: On<Pointer<Click>>,
+                                 save: Res<SaveData>,
+                                 mut exit: MessageWriter<AppExit>| {
+                                    crate::persistence::flush(&save);
+                                    exit.write(AppExit::Success);
+                                },
+                            );
+                        });
                 });
 
+            // Pinned to the screen's own bottom edge rather than inside the
+            // scrollable, centred content above: `theme::footnote` positions
+            // itself against its immediate parent, and that parent needs to
+            // stay the full-height root for "the bottom" to mean the bottom
+            // of the window rather than of the (possibly short) content atop
+            // it.
             screen.spawn(update_notice_line(latest.0.as_deref()));
             screen.spawn(theme::footnote(COPYRIGHT));
         });
@@ -212,35 +223,38 @@ fn spawn_new_game(mut commands: Commands) {
     commands
         .spawn(theme::screen(DespawnOnExit(AppState::NewGame)))
         .with_children(|screen| {
-            screen.spawn(theme::title("New Game"));
+            screen
+                .spawn(theme::screen_content())
+                .with_children(|screen| {
+                    screen.spawn(theme::title("New Game"));
 
-            screen.spawn(theme::panel()).with_children(|panel| {
-                panel.spawn(theme::label("Share code"));
-                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
-                    row.spawn(share_code_field())
-                        .observe(focus_on(FocusedField::ShareCode));
-                    row.spawn(theme::small_button("Clear")).observe(
-                        |_click: On<Pointer<Click>>, mut share: ResMut<ShareCodeInput>| {
-                            share.text.clear();
-                        },
-                    );
-                });
-                panel.spawn((
-                    theme::subtitle(
-                        "Paste a share code to replay someone else's puzzle exactly - \
+                    screen.spawn(theme::panel()).with_children(|panel| {
+                        panel.spawn(theme::label("Share code"));
+                        panel.spawn(theme::row(theme::GRID)).with_children(|row| {
+                            row.spawn(share_code_field())
+                                .observe(focus_on(FocusedField::ShareCode));
+                            row.spawn(theme::small_button("Clear")).observe(
+                                |_click: On<Pointer<Click>>, mut share: ResMut<ShareCodeInput>| {
+                                    share.text.clear();
+                                },
+                            );
+                        });
+                        panel.spawn((
+                            theme::subtitle(
+                                "Paste a share code to replay someone else's puzzle exactly - \
                          it picks the size and difficulty for you.",
-                    ),
-                    // Extra room below, on top of the panel's own row gap: the
-                    // share code is a shortcut that bypasses everything below
-                    // it, so it reads better as its own section up top.
-                    Node {
-                        margin: UiRect::bottom(Val::Px(theme::GRID * 3.0)),
-                        ..default()
-                    },
-                ));
+                            ),
+                            // Extra room below, on top of the panel's own row gap: the
+                            // share code is a shortcut that bypasses everything below
+                            // it, so it reads better as its own section up top.
+                            Node {
+                                margin: UiRect::bottom(Val::Px(theme::GRID * 3.0)),
+                                ..default()
+                            },
+                        ));
 
-                panel.spawn(theme::label("Board size"));
-                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
+                        panel.spawn(theme::label("Board size"));
+                        panel.spawn(theme::row(theme::GRID)).with_children(|row| {
                     for size in MIN_SIZE..=MAX_SIZE {
                         row.spawn((theme::small_button(&size.to_string()), SizeOption(size)))
                             .observe(
@@ -255,16 +269,16 @@ fn spawn_new_game(mut commands: Commands) {
                     }
                 });
 
-                panel.spawn((
-                    theme::label("Difficulty"),
-                    Node {
-                        margin: UiRect::top(Val::Px(theme::GRID)),
-                        ..default()
-                    },
-                ));
-                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
-                    for difficulty in ALL_DIFFICULTIES {
-                        row.spawn((
+                        panel.spawn((
+                            theme::label("Difficulty"),
+                            Node {
+                                margin: UiRect::top(Val::Px(theme::GRID)),
+                                ..default()
+                            },
+                        ));
+                        panel.spawn(theme::row(theme::GRID)).with_children(|row| {
+                            for difficulty in ALL_DIFFICULTIES {
+                                row.spawn((
                             theme::small_button(difficulty.name()),
                             DifficultyOption(difficulty),
                         ))
@@ -277,53 +291,54 @@ fn spawn_new_game(mut commands: Commands) {
                                 }
                             },
                         );
-                    }
-                });
+                            }
+                        });
 
-                panel.spawn((
-                    theme::subtitle(
-                        "Difficulty is what the puzzle demands of you, not how big it is:\n\
+                        panel.spawn((
+                            theme::subtitle(
+                                "Difficulty is what the puzzle demands of you, not how big it is:\n\
                          Easy needs only forced cells, Expert needs proof by contradiction.",
-                    ),
-                    Node {
-                        margin: UiRect::vertical(Val::Px(10.0)),
-                        ..default()
-                    },
-                ));
-
-                panel.spawn((
-                    theme::label("Seed"),
-                    Node {
-                        margin: UiRect::top(Val::Px(theme::GRID * 0.5)),
-                        ..default()
-                    },
-                ));
-                panel.spawn(theme::row(theme::GRID)).with_children(|row| {
-                    row.spawn(seed_field())
-                        .observe(focus_on(FocusedField::Seed));
-                    row.spawn((theme::small_button("Clear"), SeedClearButton))
-                        .observe(
-                            |_click: On<Pointer<Click>>,
-                             mut typed: ResMut<SeedInput>,
-                             share: Res<ShareCodeInput>| {
-                                if share.decoded().is_none() {
-                                    typed.digits.clear();
-                                }
+                            ),
+                            Node {
+                                margin: UiRect::vertical(Val::Px(10.0)),
+                                ..default()
                             },
-                        );
-                });
-                panel.spawn(theme::subtitle(
+                        ));
+
+                        panel.spawn((
+                            theme::label("Seed"),
+                            Node {
+                                margin: UiRect::top(Val::Px(theme::GRID * 0.5)),
+                                ..default()
+                            },
+                        ));
+                        panel.spawn(theme::row(theme::GRID)).with_children(|row| {
+                            row.spawn(seed_field())
+                                .observe(focus_on(FocusedField::Seed));
+                            row.spawn((theme::small_button("Clear"), SeedClearButton))
+                                .observe(
+                                |_click: On<Pointer<Click>>,
+                                 mut typed: ResMut<SeedInput>,
+                                 share: Res<ShareCodeInput>| {
+                                    if share.decoded().is_none() {
+                                        typed.digits.clear();
+                                    }
+                                },
+                            );
+                        });
+                        panel.spawn(theme::subtitle(
                     "Type a seed to replay an exact puzzle, or leave it blank for a new one. \
                      Ignored while a share code is set above.",
                 ));
-            });
+                    });
 
-            screen.spawn(theme::row(12.0)).with_children(|row| {
-                row.spawn(theme::menu_button("Back"))
-                    .observe(go_to(AppState::MainMenu));
-                row.spawn(theme::accent_button("Start"))
-                    .observe(start_puzzle);
-            });
+                    screen.spawn(theme::row(12.0)).with_children(|row| {
+                        row.spawn(theme::menu_button("Back"))
+                            .observe(go_to(AppState::MainMenu));
+                        row.spawn(theme::accent_button("Start"))
+                            .observe(start_puzzle);
+                    });
+                });
         });
 }
 
@@ -842,41 +857,47 @@ fn render_stats(commands: &mut Commands, save: &SaveData, size: u8) {
     commands
         .spawn((theme::screen(DespawnOnExit(AppState::Stats)), StatsScreen))
         .with_children(|screen| {
-            screen.spawn(theme::title("Statistics"));
-            screen.spawn(theme::label("Board size"));
-            screen.spawn(theme::row(theme::GRID)).with_children(|row| {
-                for option in MIN_SIZE..=MAX_SIZE {
-                    row.spawn(theme::small_button(&option.to_string()))
-                        .insert(theme::ButtonTint {
-                            base: selected_tint(size == option),
-                        })
-                        .observe(select_stats_size(option));
-                }
-            });
-            screen.spawn(theme::subtitle(format!("{size}x{size} boards")));
-
-            screen.spawn(theme::panel()).with_children(|panel| {
-                panel.spawn(stats_header_row([
-                    "Difficulty",
-                    "Solved",
-                    "Best",
-                    "Average",
-                    "Hints",
-                ]));
-                for row in &rows {
-                    panel.spawn(stats_row(std::array::from_fn(|i| row[i].as_str())));
-                }
-            });
-
-            // Which puzzles the hint count covers, which a column heading has
-            // no room to say.
-            screen.spawn(theme::subtitle(
-                "Hints counts those spent on the puzzles you went on to solve.",
-            ));
-
             screen
-                .spawn(theme::menu_button("Back"))
-                .observe(go_to(AppState::MainMenu));
+                .spawn(theme::screen_content())
+                .with_children(|screen| {
+                    screen.spawn(theme::title("Statistics"));
+                    screen.spawn(theme::label("Board size"));
+                    screen.spawn(theme::row(theme::GRID)).with_children(|row| {
+                        for option in MIN_SIZE..=MAX_SIZE {
+                            row.spawn(theme::small_button(&option.to_string()))
+                                .insert(theme::ButtonTint {
+                                    base: selected_tint(size == option),
+                                })
+                                .observe(select_stats_size(option));
+                        }
+                    });
+                    screen.spawn(theme::subtitle(format!("{size}x{size} boards")));
+
+                    screen
+                        .spawn(theme::scrollable_panel())
+                        .with_children(|panel| {
+                            panel.spawn(stats_header_row([
+                                "Difficulty",
+                                "Solved",
+                                "Best",
+                                "Average",
+                                "Hints",
+                            ]));
+                            for row in &rows {
+                                panel.spawn(stats_row(std::array::from_fn(|i| row[i].as_str())));
+                            }
+                        });
+
+                    // Which puzzles the hint count covers, which a column heading has
+                    // no room to say.
+                    screen.spawn(theme::subtitle(
+                        "Hints counts those spent on the puzzles you went on to solve.",
+                    ));
+
+                    screen
+                        .spawn(theme::menu_button("Back"))
+                        .observe(go_to(AppState::MainMenu));
+                });
         });
 }
 
@@ -972,32 +993,36 @@ fn spawn_settings(mut commands: Commands) {
     commands
         .spawn(theme::screen(DespawnOnExit(AppState::Settings)))
         .with_children(|screen| {
-            screen.spawn(theme::title("Settings"));
-
-            screen.spawn(theme::panel()).with_children(|panel| {
-                spawn_toggle(
-                    panel,
-                    Toggle::AutoCross,
-                    "Auto-cross",
-                    "Cross off the cells a queen rules out as soon as you place it.",
-                );
-                spawn_toggle(
-                    panel,
-                    Toggle::Colourblind,
-                    "Colourblind",
-                    "Use region colours chosen to stay separable.",
-                );
-                spawn_toggle(
-                    panel,
-                    Toggle::Sound,
-                    "Sound",
-                    "Play a cue as you mark the board, and on a solve.",
-                );
-            });
-
             screen
-                .spawn(theme::menu_button("Back"))
-                .observe(go_to(AppState::MainMenu));
+                .spawn(theme::screen_content())
+                .with_children(|screen| {
+                    screen.spawn(theme::title("Settings"));
+
+                    screen.spawn(theme::panel()).with_children(|panel| {
+                        spawn_toggle(
+                            panel,
+                            Toggle::AutoCross,
+                            "Auto-cross",
+                            "Cross off the cells a queen rules out as soon as you place it.",
+                        );
+                        spawn_toggle(
+                            panel,
+                            Toggle::Colourblind,
+                            "Colourblind",
+                            "Use region colours chosen to stay separable.",
+                        );
+                        spawn_toggle(
+                            panel,
+                            Toggle::Sound,
+                            "Sound",
+                            "Play a cue as you mark the board, and on a solve.",
+                        );
+                    });
+
+                    screen
+                        .spawn(theme::menu_button("Back"))
+                        .observe(go_to(AppState::MainMenu));
+                });
         });
 }
 

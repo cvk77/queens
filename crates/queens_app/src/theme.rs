@@ -6,6 +6,8 @@
 //! elsewhere would come from ornament — a screen's name is the biggest, boldest
 //! thing on it.
 
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
 use bevy::text::{FontFeatureTag, FontFeatures, LetterSpacing};
 use queens_core::RegionNames;
@@ -323,22 +325,101 @@ pub fn footnote(content: impl Into<String>) -> impl Bundle {
 
 // --- building blocks -------------------------------------------------------
 
-/// A full-screen column that fills the window and centres its content.
+/// Marks a screen's scrollable root, so wheel and drag input can steer it
+/// without any system needing to know which screen is currently up.
+#[derive(Component)]
+pub struct ScrollArea;
+
+/// A full-screen, vertically scrollable viewport. Its own box never moves —
+/// only [`screen_content`], the one child it centres, does.
+///
+/// A screen that outgrows the window used to spill past every edge (Bevy UI's
+/// default overflow is visible, not clipped) with no way to reach the rest.
+/// Scrolling only helps once the content can actually be taller than its
+/// container, which is why this holds no padding or centering of its own —
+/// see [`screen_content`] for that.
 pub fn screen(state_label: impl Bundle) -> impl Bundle {
     (
         Node {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),
             flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            row_gap: Val::Px(GRID * 3.0),
-            padding: UiRect::all(Val::Px(GRID * 4.0)),
+            overflow: Overflow::scroll_y(),
             ..default()
         },
+        ScrollPosition::default(),
+        ScrollArea,
         BackgroundColor(BACKGROUND),
         state_label,
     )
+}
+
+/// The screen's actual content: a centred column, padded away from the
+/// edges, with the vertical gap the old [`screen`] used to apply itself.
+///
+/// The vertical margins are `Auto` rather than relying on the parent's
+/// `justify_content`, so the same layout that centres this when it fits the
+/// window also — per ordinary flexbox auto-margin rules — settles it against
+/// the top and lets [`screen`] scroll to the rest when it does not.
+pub fn screen_content() -> impl Bundle {
+    Node {
+        width: Val::Percent(100.0),
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: Val::Px(GRID * 3.0),
+        padding: UiRect::all(Val::Px(GRID * 4.0)),
+        margin: UiRect::vertical(Val::Auto),
+        ..default()
+    }
+}
+
+/// Roughly what one "line" of mouse-wheel scroll should move, in logical
+/// pixels — wheels that report the scroll in lines rather than pixels have no
+/// other scale to go on.
+const WHEEL_LINE_PX: f32 = 24.0;
+
+/// Scrolls whichever [`ScrollArea`] the pointer sits over. Covers the mouse
+/// wheel and a trackpad's two-finger swipe, both of which arrive as
+/// [`MouseWheel`]; a touch drag is handled separately, by [`scroll_with_drag`],
+/// since a touch screen never generates wheel events.
+fn scroll_with_wheel(
+    mut wheel: MessageReader<MouseWheel>,
+    hover_map: Res<HoverMap>,
+    mut areas: Query<&mut ScrollPosition, With<ScrollArea>>,
+) {
+    for event in wheel.read() {
+        let delta = match event.unit {
+            MouseScrollUnit::Line => Vec2::new(event.x, event.y) * WHEEL_LINE_PX,
+            MouseScrollUnit::Pixel => Vec2::new(event.x, event.y),
+        };
+        for pointer_map in hover_map.values() {
+            for entity in pointer_map.keys() {
+                if let Ok(mut scroll) = areas.get_mut(*entity) {
+                    scroll.0 -= delta;
+                }
+            }
+        }
+    }
+}
+
+/// Scrolls a [`ScrollArea`] as a touch or mouse drag moves across it, so the
+/// content tracks the finger the way a phone's own scrolling does — dragging
+/// up brings later content into view, exactly as [`scroll_with_wheel`] does
+/// for a wheel notch down.
+///
+/// Stops the drag once some area consumes it, rather than letting it bubble
+/// on to an ancestor [`ScrollArea`] too — the nearest scrollable area a drag
+/// starts inside (the stats table, say) is the one that should move; without
+/// this, the same drag would also reach [`screen`]'s and scroll the whole
+/// page underneath it.
+fn scroll_with_drag(
+    mut drag: On<Pointer<Drag>>,
+    mut areas: Query<&mut ScrollPosition, With<ScrollArea>>,
+) {
+    if let Ok(mut scroll) = areas.get_mut(drag.event_target()) {
+        scroll.0 -= drag.delta;
+        drag.propagate(false);
+    }
 }
 
 /// A flat block of colour that groups related controls. No border, no shadow:
@@ -357,13 +438,55 @@ pub fn panel() -> impl Bundle {
     )
 }
 
+/// A [`panel`] built to hold something wider than the screen — a data table's
+/// columns can't wrap the way a button [`row`] does, so instead of spilling
+/// past the window the way an ordinary panel would, this one scrolls
+/// sideways: the same [`ScrollArea`]/[`ScrollPosition`] pairing [`screen`]
+/// uses for its own overflow, on the horizontal axis instead of the vertical.
+///
+/// Left-aligned rather than centred: centring would need the same
+/// safe-centring [`screen_content`] gets from auto margins, but a table has
+/// no natural single child to hang that margin off, and a left-aligned table
+/// looks no different from a centred one the moment it's narrow enough to
+/// need neither.
+pub fn scrollable_panel() -> impl Bundle {
+    (
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::FlexStart,
+            // `overflow` alone only decides what happens to content past this
+            // box's own edge — it does nothing to the box's size, so without
+            // a hard cap here the panel still grows to fit its widest row
+            // and never becomes narrower than the screen for `overflow` to
+            // have anything to clip.
+            max_width: Val::Percent(100.0),
+            row_gap: Val::Px(GRID * 2.0),
+            padding: UiRect::axes(Val::Px(GRID * 5.0), Val::Px(GRID * 4.0)),
+            border_radius: BorderRadius::all(Val::Px(GRID)),
+            overflow: Overflow::scroll_x(),
+            ..default()
+        },
+        ScrollPosition::default(),
+        ScrollArea,
+        BackgroundColor(PANEL),
+    )
+}
+
 /// A horizontal group of controls.
+///
+/// Wraps onto further lines rather than running past the edge of the screen:
+/// a picker with eight size buttons has nowhere else to put the overflow on a
+/// phone-width window, and unlike the text this app also sets no-wrap on,
+/// nothing here depends on staying a single line.
 pub fn row(gap: f32) -> impl Bundle {
     Node {
         flex_direction: FlexDirection::Row,
+        flex_wrap: FlexWrap::Wrap,
         align_items: AlignItems::Center,
         justify_content: JustifyContent::Center,
+        align_content: AlignContent::Center,
         column_gap: Val::Px(gap),
+        row_gap: Val::Px(gap),
         ..default()
     }
 }
@@ -472,7 +595,8 @@ impl Plugin for ThemePlugin {
                 )
                 .expect("the default font id always accepts an overwrite");
         }
-        app.add_systems(Update, animate_buttons);
+        app.add_systems(Update, (animate_buttons, scroll_with_wheel))
+            .add_observer(scroll_with_drag);
     }
 }
 

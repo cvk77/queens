@@ -48,10 +48,14 @@ fn spawn_page(
     commands
         .spawn(theme::screen(DespawnOnExit(page)))
         .with_children(|screen| {
-            screen.spawn(theme::label("How to Play"));
-            screen.spawn(theme::title(heading));
-            screen.spawn(theme::panel()).with_children(build);
-            spawn_nav(screen, page);
+            screen
+                .spawn(theme::screen_content())
+                .with_children(|screen| {
+                    screen.spawn(theme::label("How to Play"));
+                    screen.spawn(theme::title(heading));
+                    screen.spawn(theme::panel()).with_children(build);
+                    spawn_nav(screen, page);
+                });
         });
 }
 
