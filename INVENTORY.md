@@ -87,7 +87,7 @@ violation still fails the audit. See [DESIGN.md](DESIGN.md#generation-budgets-an
 | `states.rs` | `AppState` (MainMenu, NewGame, Generating, Playing, Stats, Settings, HowToPlay), `PlayState` sub-state (Active, Paused, Won) and `HowToPlayPage` sub-state (Goal, Touching, Controls, Hints) |
 | `theme.rs` | The embedded Space Grotesk font, palette, both region palettes and their colour names, the type scale (`hero`/`title`/`label`/`text`/`numeric`/`subtitle`/`footnote`), `screen`/`panel`/`row`, `menu_button`/`accent_button`/`small_button`, `ButtonTint` and its animated hover/press system, `format_time` |
 | `session.rs` | `Session` — the live puzzle, marks, clock, conflicts, undo snapshots, auto-cross provenance, hints used. Also `PuzzleRequest` and `Restore` |
-| `persistence.rs` | `SaveData`, `Settings`, `DifficultyStats`, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
+| `persistence.rs` | `SaveData`, `Settings`, `DifficultyStats` by size and difficulty, `InProgress`, `SAVE_VERSION`, throttled write-on-change |
 | `generation.rs` | `OnEnter(Generating)`: spawns the search on `AsyncComputeTaskPool`, polls it, pulses the loading dots |
 | `menu.rs` | Main menu (with the version and copyright line, and an update notice above it when one is available, all pinned to the bottom), New Game (size, difficulty, seed entry, share code entry that locks and dims size/difficulty to it, click-to-focus between the two typed fields), Statistics, Settings; `SeedInput`, `ShareCodeInput`, `FocusedField` |
 | `howto.rs` | The How to Play screen: four pages (Goal, No Touching, Controls, Hints and Difficulty) paginated by `HowToPlayPage`, each illustrated with a hand-drawn demo board built from `board::queen_token`/`cross_token` rather than a real `Puzzle` |
@@ -142,7 +142,7 @@ automatic.
 | `queens_core/src/seed.rs` | Share code round-tripping through `Display`/`parse`, and its rejection cases |
 | `queens_app/src/game/interaction.rs` | The gesture state machine, including a tap that drifts off its cell; letter shortcuts matching by produced character rather than physical key, case-insensitively, and never on a non-character key |
 | `queens_app/src/session.rs` | Queen removal taking its auto-crosses, undo, when a hint counts |
-| `queens_app/src/persistence.rs` | Hints accumulating on a solve, and older saves still loading |
+| `queens_app/src/persistence.rs` | Hints accumulating on a solve, independent records by board size, and older saves loading without their statistics |
 | `queens_app/src/menu.rs` | Seed and share code field parsing, their character caps, focus keeping keystrokes out of the wrong field, settings syncing to a started share code, the copyright line staying ASCII |
 | `queens_app/src/game/hud.rs` | The wordiest hint fitting the message slot |
 | `queens_app/src/audio.rs` | Every embedded cue decoding, which mark makes which sound, and a sweep ticking rather than buzzing |

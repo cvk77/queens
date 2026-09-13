@@ -796,11 +796,33 @@ fn option_tint(selected: bool, locked: bool) -> Color {
 
 // --- statistics ------------------------------------------------------------
 
+#[derive(Component)]
+struct StatsScreen;
+
 fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
+    render_stats(
+        &mut commands,
+        &save,
+        save.settings.size.clamp(MIN_SIZE, MAX_SIZE),
+    );
+}
+
+fn select_stats_size(
+    size: u8,
+) -> impl Fn(On<Pointer<Click>>, Commands, Res<SaveData>, Query<Entity, With<StatsScreen>>) {
+    move |_click, mut commands, save, roots| {
+        for root in &roots {
+            commands.entity(root).despawn();
+        }
+        render_stats(&mut commands, &save, size);
+    }
+}
+
+fn render_stats(commands: &mut Commands, save: &SaveData, size: u8) {
     let rows: Vec<[String; 5]> = ALL_DIFFICULTIES
         .into_iter()
         .map(|difficulty| {
-            let stats = save.stats_for(difficulty);
+            let stats = save.stats_for(size, difficulty);
             [
                 difficulty.name().to_string(),
                 format!("{} / {}", stats.solved, stats.started),
@@ -818,9 +840,20 @@ fn spawn_stats(mut commands: Commands, save: Res<SaveData>) {
         .collect();
 
     commands
-        .spawn(theme::screen(DespawnOnExit(AppState::Stats)))
+        .spawn((theme::screen(DespawnOnExit(AppState::Stats)), StatsScreen))
         .with_children(|screen| {
             screen.spawn(theme::title("Statistics"));
+            screen.spawn(theme::label("Board size"));
+            screen.spawn(theme::row(theme::GRID)).with_children(|row| {
+                for option in MIN_SIZE..=MAX_SIZE {
+                    row.spawn(theme::small_button(&option.to_string()))
+                        .insert(theme::ButtonTint {
+                            base: selected_tint(size == option),
+                        })
+                        .observe(select_stats_size(option));
+                }
+            });
+            screen.spawn(theme::subtitle(format!("{size}x{size} boards")));
 
             screen.spawn(theme::panel()).with_children(|panel| {
                 panel.spawn(stats_header_row([
@@ -1033,6 +1066,71 @@ fn highlight_toggles(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn statistics_picker_switches_records_without_changing_game_preferences() {
+        use bevy::camera::NormalizedRenderTarget;
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::picking::{
+            backend::HitData,
+            pointer::{Location, PointerId},
+        };
+        use queens_core::Difficulty;
+
+        let mut world = World::new();
+        let mut save = SaveData::default();
+        save.record_solved(8, Difficulty::Hard, 80.0, 0);
+        save.record_solved(12, Difficulty::Hard, 120.0, 0);
+        world.insert_resource(save);
+        world.run_system_once(spawn_stats).unwrap();
+        let texts = |world: &mut World| {
+            world
+                .query::<&Text>()
+                .iter(world)
+                .map(|text| text.0.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(texts(&mut world).contains(&theme::format_time(80.0)));
+        for (label, heading, seconds) in [("12", "12x12 boards", 120.0), ("8", "8x8 boards", 80.0)]
+        {
+            let button = world
+                .query::<(&Text, &ChildOf)>()
+                .iter(&world)
+                .find(|(text, _)| text.0 == label)
+                .unwrap()
+                .1
+                .parent();
+            world.trigger(Pointer::new(
+                PointerId::Mouse,
+                Location {
+                    target: NormalizedRenderTarget::None {
+                        width: 1024,
+                        height: 820,
+                    },
+                    position: Vec2::ZERO,
+                },
+                Click {
+                    button: PointerButton::Primary,
+                    hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                    duration: std::time::Duration::ZERO,
+                    count: 1,
+                },
+                button,
+            ));
+            world.flush();
+            let visible = texts(&mut world);
+            assert!(visible.contains(&heading.to_string()));
+            assert!(visible.contains(&theme::format_time(seconds)));
+            assert_eq!(
+                world
+                    .query_filtered::<Entity, With<StatsScreen>>()
+                    .iter(&world)
+                    .count(),
+                1
+            );
+            assert_eq!(world.resource::<SaveData>().settings.size, 8);
+        }
+    }
 
     /// The version number is what a bug report actually needs out of this
     /// line, however the name around it is spelled.

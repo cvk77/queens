@@ -124,7 +124,7 @@ fn finish_task(
         // A fresh puzzle counts as an attempt; a resumed one was counted when
         // it was first started.
         if request.restore.is_none() {
-            save.record_started(puzzle.rating().difficulty);
+            save.record_started(puzzle.size(), puzzle.rating().difficulty);
         }
         if puzzle.rating().difficulty != request.seed.difficulty {
             info!(

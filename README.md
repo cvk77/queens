@@ -118,18 +118,21 @@ is rebuilt on load. Generator changes can invalidate old saves and share codes.
 
 ## Settings and progress
 
-Settings, per-difficulty statistics and one in-progress game live in
+Settings, statistics and one in-progress game live in
 `save.ron` under your platform's data directory (`%APPDATA%\queens` on Windows,
 `~/.local/share/queens` on Linux, `~/Library/Application Support/queens` on
 macOS). A corrupt or outdated file is discarded rather than fatal.
 
-**Statistics** are per difficulty: puzzles solved out of started, your best and
-average solve times, and the hints you spent. Hints are counted per puzzle
+**Statistics** are per board size and difficulty: puzzles solved out of started,
+your best and average solve times, and the hints you spent. Hints are counted per puzzle
 rather than per press — asking again without touching the board just re-reads
 the hint already on screen — and they follow a puzzle across a save and resume.
 Only the puzzles you went on to solve are counted, which is what keeps the
 figure comparable with the times beside it. The victory panel shows the tally
-for the puzzle you just finished.
+for the puzzle you just finished. Select a board size on the Statistics screen
+to compare like-sized puzzles. Best times on the victory panel use the same
+size and difficulty. Older statistics are discarded because their board sizes
+were not recorded; settings and saved games are kept.
 
 - **Auto-cross** crosses off every cell a queen rules out the moment you place
   it. Lift that queen again and its crosses go with it; the ones you made

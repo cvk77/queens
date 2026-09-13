@@ -148,6 +148,7 @@ fn snapshot(session: &Session) -> InProgress {
 
 fn record_win(session: Res<Session>, mut save: ResMut<SaveData>) {
     save.record_solved(
+        session.puzzle.size(),
         session.puzzle.rating().difficulty,
         session.elapsed,
         session.hints_used,
@@ -205,7 +206,7 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
     let size = session.puzzle.size();
     let rating = session.puzzle.rating().difficulty;
     let elapsed = session.elapsed;
-    let best = save.stats_for(rating).best_seconds;
+    let best = save.stats_for(size, rating).best_seconds;
     let is_best = best.is_none_or(|best| elapsed <= best + f32::EPSILON);
 
     commands
@@ -219,7 +220,7 @@ fn spawn_victory_overlay(mut commands: Commands, session: Res<Session>, save: Re
                     if is_best { theme::SUCCESS } else { theme::TEXT },
                 ));
                 panel.spawn(theme::subtitle(if is_best {
-                    format!("A new best for {rating}.")
+                    format!("A new best for {size}x{size} {rating}.")
                 } else {
                     format!(
                         "{size}x{size} {rating}   best {}",

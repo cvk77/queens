@@ -163,6 +163,10 @@ Freshly minted seeds are capped at eight digits (`MAX_FRESH_SEED`) so a player
 can read one off the screen and type it back in. Any `u64` is still a valid
 seed; only the ones the game invents are short.
 
+Statistics compare puzzles of the same size and rated difficulty: larger boards
+take longer even within one difficulty band. Old aggregate statistics are ignored;
+size-specific records default to empty without invalidating settings or saved games.
+
 ## Input: a click and a sweep must not fight
 
 Bevy starts a drag on the **first pixel** of movement while a button is held,

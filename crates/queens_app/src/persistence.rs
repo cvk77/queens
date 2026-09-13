@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use queens_core::{Difficulty, Mark, PuzzleSeed, rating::ALL_DIFFICULTIES};
+use queens_core::{Difficulty, MAX_SIZE, MIN_SIZE, Mark, PuzzleSeed, rating::ALL_DIFFICULTIES};
 use serde::{Deserialize, Serialize};
 
 /// Bumped when an old file can no longer be trusted; older files are discarded
@@ -64,7 +64,7 @@ impl Default for Settings {
     }
 }
 
-/// A player's record in one difficulty band.
+/// A player's record for one board size and difficulty band.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 pub struct DifficultyStats {
     pub started: u32,
@@ -108,9 +108,11 @@ pub struct InProgress {
 pub struct SaveData {
     pub version: u32,
     pub settings: Settings,
-    /// Indexed by [`Difficulty::index`] — an array rather than a map so the
-    /// file stays readable and no key ever fails to parse.
-    pub stats: [DifficultyStats; ALL_DIFFICULTIES.len()],
+    /// Indexed by size minus `MIN_SIZE`, then difficulty. Older saves have no
+    /// size-specific records, so these start empty and their old `stats` are ignored.
+    #[serde(default)]
+    pub stats_by_size:
+        [[DifficultyStats; ALL_DIFFICULTIES.len()]; (MAX_SIZE - MIN_SIZE + 1) as usize],
     pub in_progress: Option<InProgress>,
 }
 
@@ -119,30 +121,33 @@ impl Default for SaveData {
         Self {
             version: SAVE_VERSION,
             settings: Settings::default(),
-            stats: [DifficultyStats::default(); ALL_DIFFICULTIES.len()],
+            stats_by_size: [[DifficultyStats::default(); ALL_DIFFICULTIES.len()];
+                (MAX_SIZE - MIN_SIZE + 1) as usize],
             in_progress: None,
         }
     }
 }
 
 impl SaveData {
-    pub fn stats_for(&self, difficulty: Difficulty) -> &DifficultyStats {
-        &self.stats[difficulty.index()]
+    pub fn stats_for(&self, size: u8, difficulty: Difficulty) -> &DifficultyStats {
+        &self.stats_by_size[usize::from(size - MIN_SIZE)][difficulty.index()]
     }
 
-    pub fn stats_for_mut(&mut self, difficulty: Difficulty) -> &mut DifficultyStats {
-        &mut self.stats[difficulty.index()]
+    pub fn stats_for_mut(&mut self, size: u8, difficulty: Difficulty) -> &mut DifficultyStats {
+        &mut self.stats_by_size[usize::from(size - MIN_SIZE)][difficulty.index()]
     }
 
     /// Records the start of a puzzle.
-    pub fn record_started(&mut self, difficulty: Difficulty) {
-        self.stats_for_mut(difficulty).started += 1;
+    pub fn record_started(&mut self, size: u8, difficulty: Difficulty) {
+        self.stats_for_mut(size, difficulty).started += 1;
     }
 
     /// Records a solve, the hints it took, and the best time.
-    pub fn record_solved(&mut self, difficulty: Difficulty, seconds: f32, hints: u32) {
-        let stats = self.stats_for_mut(difficulty);
+    pub fn record_solved(&mut self, size: u8, difficulty: Difficulty, seconds: f32, hints: u32) {
+        let stats = self.stats_for_mut(size, difficulty);
         stats.solved += 1;
+        // A resumed puzzle can predate these records; every solve is also an attempt.
+        stats.started = stats.started.max(stats.solved);
         stats.total_seconds += seconds;
         stats.hints_used += hints;
         stats.best_seconds = Some(match stats.best_seconds {
@@ -315,25 +320,49 @@ mod tests {
     #[test]
     fn solves_accumulate_the_hints_they_took() {
         let mut save = SaveData::default();
-        save.record_solved(Difficulty::Hard, 100.0, 3);
-        save.record_solved(Difficulty::Hard, 80.0, 0);
-        save.record_solved(Difficulty::Hard, 90.0, 1);
+        save.record_solved(8, Difficulty::Hard, 100.0, 3);
+        save.record_solved(8, Difficulty::Hard, 80.0, 0);
+        save.record_solved(8, Difficulty::Hard, 90.0, 1);
         // A different band keeps its own tally.
-        save.record_solved(Difficulty::Easy, 20.0, 5);
+        save.record_solved(8, Difficulty::Easy, 20.0, 5);
 
-        let hard = save.stats_for(Difficulty::Hard);
+        let hard = save.stats_for(8, Difficulty::Hard);
         assert_eq!(hard.solved, 3);
         assert_eq!(hard.hints_used, 4);
         assert_eq!(hard.best_seconds, Some(80.0));
 
-        let easy = save.stats_for(Difficulty::Easy);
+        let easy = save.stats_for(8, Difficulty::Easy);
         assert_eq!(easy.hints_used, 5);
     }
 
-    /// New fields are defaulted rather than versioned, so a save written before
-    /// hints were counted still loads and keeps the statistics it does have.
     #[test]
-    fn a_save_predating_the_hint_counters_still_loads() {
+    fn board_sizes_keep_independent_records_after_reloading() {
+        let mut save = SaveData::default();
+        for size in MIN_SIZE..=MAX_SIZE {
+            save.record_started(size, Difficulty::Hard);
+            save.record_started(size, Difficulty::Hard);
+            save.record_solved(
+                size,
+                Difficulty::Hard,
+                f32::from(size) * 10.0,
+                u32::from(size),
+            );
+        }
+        let text = ron::to_string(&save).unwrap();
+        let save: SaveData = ron::from_str(&text).unwrap();
+        for size in MIN_SIZE..=MAX_SIZE {
+            let stats = save.stats_for(size, Difficulty::Hard);
+            assert_eq!(stats.started, 2);
+            assert_eq!(stats.solved, 1);
+            assert_eq!(stats.best_seconds, Some(f32::from(size) * 10.0));
+            assert_eq!(stats.average_seconds(), stats.best_seconds);
+            assert_eq!(stats.hints_used, u32::from(size));
+            assert_eq!(save.stats_for(size, Difficulty::Easy).started, 0);
+        }
+    }
+
+    #[test]
+    fn older_saves_keep_settings_and_resume_but_discard_statistics() {
         // Copied from a file this build's predecessor wrote: the fixed-size
         // stats array is a RON tuple, not a list.
         let older = r#"(
@@ -353,12 +382,21 @@ mod tests {
         )"#;
 
         let save: SaveData = ron::from_str(older).expect("an older save should still parse");
-        let easy = save.stats_for(Difficulty::Easy);
-        assert_eq!(easy.solved, 2);
-        assert_eq!(easy.hints_used, 0);
-        assert_eq!(save.in_progress.expect("resume slot").hints_used, 0);
+        assert_eq!(save.stats_for(8, Difficulty::Easy).solved, 0);
+        let game = save.in_progress.as_ref().expect("resume slot");
+        assert_eq!(game.hints_used, 0);
+        assert_eq!(game.elapsed, 12.0);
+        assert_eq!(save.settings.size, 8);
         // A save written before there was anything to hear is not a save that
         // asked for silence.
         assert!(save.settings.sound);
+
+        let mut save = save;
+        save.record_solved(8, Difficulty::Medium, 60.0, 0);
+        let text = ron::to_string(&save).unwrap();
+        assert!(!text.contains("stats:"));
+        let save: SaveData = ron::from_str(&text).unwrap();
+        assert_eq!(save.stats_for(8, Difficulty::Medium).started, 1);
+        assert_eq!(save.stats_for(8, Difficulty::Medium).solved, 1);
     }
 }
