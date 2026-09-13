@@ -2,12 +2,13 @@
 
 Why the code is shaped the way it is. For what the game does, see
 [README.md](README.md); for where things live, [INVENTORY.md](INVENTORY.md).
+Contributor commands and rules live in [AGENTS.md](AGENTS.md).
 
 ## The puzzle logic knows nothing about Bevy
 
-`queens_core` has one dependency, `serde`. Everything about the game — the
-board, the four constraints, both solvers, the generator — lives there, and the
-Bevy app is a shell around it.
+`queens_core` depends on `serde` and, on wasm, `web-time`. It has no Bevy
+dependency. The board, the four constraints, both solvers and the generator
+live there; the Bevy app is a shell around that logic.
 
 This is what makes the generator testable at all. Puzzle generation is a search
 with statistical properties (how often it succeeds, how long it takes, what
@@ -104,18 +105,20 @@ one of that rival's queens is moved into a neighbouring region:
 
 Requiring the destination to be orthogonally adjacent keeps it contiguous. If
 removing the cell would split its old region, the stranded pieces travel with it
-(`relocate`), so contiguity holds on both sides. Each repair kills at least one
+(`try_relocate`), so contiguity holds on both sides. Each repair kills at least one
 rival, and the layout converges. This took uniqueness yield from ~0% to 30–97%
 depending on size.
 
 Region shapes that come out of repair are irregular in a way pure growth never
 produces, which is a pleasant side effect: the boards look hand-drawn.
 
-## No single-cell regions outside Easy
+## Region-size constraints
 
 A one-cell region is a free queen: `Single` places it immediately, with no
 reasoning at all. That is a fair leg-up on Easy and a giveaway anywhere else, so
-Medium and above require every region to hold at least two cells.
+normal generation for Medium and above requires every region to hold at least
+two cells. The last-resort exception is described under
+[generation budgets and fallbacks](#generation-budgets-and-fallbacks).
 
 Enforcing this was not a one-line change, because **the repair step had been
 relying on creating them.** When a region's queen is attached to the rest of it
@@ -137,8 +140,9 @@ enforces the rule.
 ## Determinism is load-bearing
 
 A saved game stores its `PuzzleSeed` and the player's marks — never the board.
-Generation is deterministic, so the puzzle is rebuilt on load. That keeps the
-save file tiny and version-tolerant.
+Generation is deterministic, so the puzzle is rebuilt on load. The save also
+keeps elapsed time, auto-cross provenance and hints used. Omitting the generated
+layout keeps it compact, but ties compatibility to the generation algorithm.
 
 It also makes determinism a hard invariant rather than a nicety. The entire
 search consumes the RNG in a fixed order, including the attempts it rejects, and
@@ -146,14 +150,14 @@ a test asserts that the same seed yields a byte-identical puzzle.
 
 Two consequences:
 
-- **The RNG is vendored.** A 60-line SplitMix64 lives in `rng.rs` instead of a
+- **The RNG is vendored.** SplitMix64 lives in `rng.rs` instead of a
   `rand` dependency. A dependency bump that changed the RNG stream or the
   shuffle algorithm would silently invalidate every save file, and no amount of
-  version pinning makes that risk worth carrying for the twenty lines involved.
+  version pinning removes that compatibility obligation.
 - **`SAVE_VERSION` tracks the generator, not just the format.** Any change to
   how a seed becomes a puzzle must bump it, or a resume restores the player's
-  marks onto a *different* board — which is worse than losing the save. It went
-  to `2` when the region-size floor landed.
+  marks onto a *different* board. Output-preserving refactors do not require a
+  bump; compatible new save fields use defaults. See the contributor guide.
 
 Freshly minted seeds are capped at eight digits (`MAX_FRESH_SEED`) so a player
 can read one off the screen and type it back in. Any `u64` is still a valid
@@ -235,10 +239,9 @@ puzzle needs, at no extra entities.
 crown built from rotated squares behind a band; the cross is an ASCII `X`.
 Neither Bevy's old built-in font nor the Space Grotesk embedded now carries a
 chess glyph, so `♛` is tofu regardless of which one is set; the disc and crown
-render identically either way. The same reasoning keeps every UI string plain
-ASCII (asserted by a test in `theme.rs`) rather than trusting a particular
-font's coverage of an em dash or a middle dot — a future font change stays
-low-risk instead of a fresh hunt for boxes.
+render identically either way. UI text follows the character conventions in
+[AGENTS.md](AGENTS.md#coding-conventions). The test in `theme.rs` checks region
+names for ASCII, not every user-visible string.
 
 Marks are shown by switching `Node.display` between `None` and `Flex`, not by
 toggling `Visibility`: a hidden node still occupies layout space, which knocks
@@ -251,10 +254,8 @@ but a stopped clock should not buy free study time.
 
 Every colour is a solid fill standing for something — a selection, a state, a
 region — never a gradient or a shadow doing the work light and shade would do
-for a physical object. `BoxShadow` and per-side `border_radius` gradients exist
-in Bevy 0.19 and were deliberately left unused: this board is a digital thing,
-not a simulation of a physical one, and reaching for either would be decoration
-standing in for a distinction the colour should already be making.
+for a physical object. Shadows and gradients are deliberately left unused:
+the colour itself should communicate the distinction.
 
 Type carries the hierarchy that ornament would elsewhere: a screen's own name
 (`theme::title`/`theme::hero`) is set big, bold and uppercase because it is the
@@ -281,24 +282,36 @@ looks like breathing rather than steps. A screen used to rise and settle into
 place on entering too (`EnterMotion`); it was cut, not for this tension, but
 because the motion itself did not earn its keep.
 
-## Generation runs off the main thread
+## Generation budgets and fallbacks
 
-The search is normally a few milliseconds, but a rare request — an Easy 12×12, or
-an Expert one — can take seconds, because such puzzles are genuinely scarce.
-It runs on `AsyncComputeTaskPool` behind a loading screen, so the window stays
-responsive.
+Generation runs on `AsyncComputeTaskPool`. Native builds use a worker thread so
+long searches leave the loading screen responsive. The browser build does not
+enable atomics or worker-thread generation, so expensive searches can block the
+page, including its loading animation.
 
-A wall-clock budget would be the obvious way to cap the wait, and it is ruled
-out: generation must stay deterministic, and a time limit would make the result
-depend on machine speed and load, breaking resume-from-seed. Instead the attempt
-budget is fixed, and if the requested band proves unreachable the closest
-achievable puzzle is returned with its *actual* rating shown in the HUD.
+The main search uses fixed attempt budgets, never elapsed time, to keep results
+independent of machine speed. It prefers the requested difficulty, then the
+closest deductively solvable candidate, showing the returned rating in the HUD.
+The share code retains the requested difficulty because that is part of the seed.
+
+There are two further fallbacks in `generator.rs`: a unique layout the deductive
+solver could not finish may be returned as Expert with zero rating steps; if no
+candidate exists, `last_resort` searches without a total attempt bound. After
+500 attempts in that last-resort loop, it relaxes the minimum region area to one.
+These paths preserve uniqueness but mean deductive solvability, the requested
+band and the non-Easy region-size floor are not unconditional guarantees.
+
+The CLI audit accepts an unrated layout labelled Expert, but still rejects a
+region smaller than the requested band's minimum. Keep these limitations visible
+when evaluating generation changes; passing an audit does not prove that every
+puzzle can be finished by the deductive solver.
 
 ## How this is verified
 
-Three layers, because each catches things the others cannot.
+Three layers, because each catches things the others cannot. Commands and
+required checks live in [AGENTS.md](AGENTS.md#commands-and-verification).
 
-**Unit tests** (71 functions, 69 of them run by default) carry the invariants.
+**Unit tests** carry the invariants.
 The most important is
 `deductions_are_sound_on_generated_puzzles`: across generated puzzles at every
 size and difficulty, no deduction rule ever concludes something false. Others
@@ -321,17 +334,18 @@ and a misaligned table column.
 ## The browser build is the same game, not a port
 
 The web version is the same binary target compiled for `wasm32-unknown-unknown`,
-with five `cfg`s where the platform genuinely has no answer, rather than a
-parallel implementation. The list is in [CLAUDE.md](CLAUDE.md); what matters
-here is the shape of the split.
+with target-specific branches rather than a parallel implementation. Besides
+time and persistence, `update_check.rs` omits the native network check,
+`main.rs` configures a page-owned canvas, and `menu.rs` omits Quit. Native
+`ureq` and `dirs` dependencies are excluded from wasm in the app manifest.
 
 Persistence is the interesting one. Rather than making the save layer abstract,
 `persistence.rs` keeps one `SaveData` and one RON format and swaps only *where
 the bytes go* — a file under `dirs::data_dir()`, or `localStorage`. That means
-`SAVE_VERSION` still governs both, and a change to generation still invalidates
+`SAVE_VERSION` still governs both, and a change to generated output invalidates
 both, which is the property that made the version number load-bearing in the
 first place. An abstraction with two implementations would have let the two
-drift; a two-function backend cannot.
+drift; sharing the serialisation code keeps the format in one place.
 
 `queens_core` gained a wasm-only dependency (`web-time`) and that is not a
 breach of the no-Bevy rule. The rule exists so the generator stays testable at
@@ -353,19 +367,9 @@ problem.
 
 ## Known trade-offs
 
-- **Easy and Expert at 12×12 are slow.** Both are scarce (a few percent of
-  layouts), so the search grinds: median around 1–2s, with a tail past 5s.
-  Mitigated by the background thread and the honest fallback rating, not solved.
+- **Large Easy and Expert boards can take seconds to generate.** Those bands
+  are scarce at 12×12. Task execution and fallback limits are described above.
 - **A sweep is one undo step per cell.** Dragging fifteen crosses takes fifteen
-  undos to reverse. Defensible, but not obviously right.
-- **Lint and formatting run on Linux only in CI.** The tests run on all three
-  platforms, but the same clippy warnings fire on each, so checking three times
-  would only spend runner minutes.
-- **Nothing builds or checks the web target in CI.** It is a `cfg`d variant of
-  the same code, so it can break without a desktop build noticing. Until CI
-  runs `cargo clippy --target wasm32-unknown-unknown`, that is caught only by
-  whoever remembers to run it.
-- **A 12×12 search would freeze a browser tab.** Generation runs on the async
-  compute pool, which on wasm without atomics is the main thread. The sizes
-  that take seconds on the desktop are the ones that would stall the page, and
-  the loading animation cannot run to say so. Untested, and unaddressed.
+  undos to reverse.
+- **Web and visual checks remain manual.** Native CI does not cover browser
+  behaviour or screenshot appearance; see the contributor verification guide.

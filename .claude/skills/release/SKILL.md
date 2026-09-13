@@ -36,8 +36,8 @@ cargo test --workspace
 
 All three must pass — fix and re-run rather than tagging around a failure.
 If this release also carries generator/solver or UI changes that haven't
-been verified yet, follow `CLAUDE.md`'s "Verifying changes" section first
-(the `queens-gen bench` audit, or the scripted `QUEENS_CAPTURE` run) — a
+been verified yet, follow [AGENTS.md: Commands and verification](../../../AGENTS.md#commands-and-verification) first
+(the `cargo audit-puzzles` audit, or the scripted `QUEENS_CAPTURE` run) — a
 release is exactly the wrong moment to skip that.
 
 ## 3. Commit

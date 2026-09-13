@@ -24,8 +24,9 @@ diagonal are perfectly legal as long as they are two or more rows apart.
  . . . . .      illegal would be r1c3 — diagonally adjacent to r0c2
 ```
 
-Every generated puzzle has **exactly one** solution, and every one can be solved
-by reasoning alone. You never need to guess.
+Every generated puzzle has **exactly one** solution. The generator aims for
+puzzles solvable by deduction, though its fallback can return an Expert puzzle
+that the built-in deductive solver cannot finish.
 
 The main menu's **How to Play** screen covers the same ground with example
 boards, if you would rather learn by looking than by reading.
@@ -93,14 +94,17 @@ obvious to the most demanding, and the band is set by the hardest rule it needed
 | **Expert** | Proof by contradiction |
 
 Board size and difficulty are chosen independently, so an Easy 11×11 and an
-Expert 6×6 are both perfectly reasonable requests. Outside Easy, every region
-holds at least two cells — a one-cell region places its own queen for nothing.
+Expert 6×6 are both reasonable requests. If the generator cannot find the
+requested band within its search budget, it returns a fallback and displays
+that puzzle's rating. Non-Easy requests normally require at least two cells per
+region; the last-resort search can relax this. See the
+[generator design](DESIGN.md#generation-budgets-and-fallbacks) for the limits.
 
 ## Seeds and share codes
 
-Every puzzle is reproducible from its board size, difficulty and RNG seed,
-shown together as a share code in the top bar during play and on the victory
-panel. Click it to copy it, then paste it into the **Share code** box on the
+Within a compatible generator version, every puzzle is reproducible from its
+board size, requested difficulty and RNG seed, shown together as a share code
+in the top bar during play and on the victory panel. Click it to copy it, then paste it into the **Share code** box on the
 New Game screen to play that exact puzzle again - board size and difficulty
 lock to what the code says while it is set.
 
@@ -108,8 +112,9 @@ To reuse just the seed at a size or difficulty of your own choosing, type it
 into the separate **Seed** box instead and pick size and difficulty as usual,
 or leave both boxes blank for something new.
 
-Saved games store only the seed, size and difficulty, so the resume slot is a
-few bytes and the board is rebuilt on load.
+Saved games store the seed, size and requested difficulty together with your
+marks, elapsed time, auto-cross information and hints used. The generated board
+is rebuilt on load. Generator changes can invalidate old saves and share codes.
 
 ## Settings and progress
 
@@ -136,21 +141,21 @@ for the puzzle you just finished.
 
 ## Update check
 
-Once per launch, the game asks GitHub for this project's latest release and
-mentions it on the main menu if there is a newer one - nothing is downloaded
+Once per launch, the desktop game asks GitHub for this project's latest release
+and mentions it on the main menu if there is a newer one - nothing is downloaded
 or installed, and a failed or offline check is silently treated as "nothing
 to report". This is the only network access the game ever makes; everything
 else, including saved games, stays on your machine.
 
 ## Building
 
-Needs Rust 1.95 or newer. `rust-toolchain.toml` pins the exact toolchain the
-project is built and tested with, so rustup will fetch it for you.
+Use the Rust toolchain pinned in `rust-toolchain.toml`; rustup will fetch it
+for you. This is the version used for development and CI.
 
 ```sh
 cargo run -p queens_app --release   # play
 cargo play                          # much faster rebuilds while developing
-cargo test --workspace
+cargo test --workspace --locked
 ```
 
 On Linux, Bevy needs a few system libraries:
@@ -161,29 +166,18 @@ sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev \
 ```
 
 Prebuilt binaries for Windows, Linux and macOS are attached to each release by
-`.github/workflows/ci.yml`, which builds them for a version tag rather than for
-every push. Each release also carries a `SHA256SUMS` file:
+`.github/workflows/ci.yml` on version tags. Packaging can also be tested without
+publishing; see [AGENTS.md](AGENTS.md#ci-and-packaging). Each release also
+carries a `SHA256SUMS` file:
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
-### Windows will warn you the first time
+### Desktop packages
 
-Downloading the Windows build and running it gets you "Windows protected your
-PC" from Defender SmartScreen. Choose **More info**, then **Run anyway**.
-
-The binaries are not code-signed. Worth knowing before you assume signing would
-fix it: Microsoft's own documentation says a valid certificate does not remove
-that dialog either. SmartScreen goes by reputation, which a download builds up
-over weeks and hundreds of installs; a certificate makes that reputation carry
-from one release to the next, and puts a publisher name in the dialog instead of
-"Unknown publisher". It does not buy silence on release day. For a free puzzle
-game the certificate is not worth its yearly cost, so the checksums above are
-what is offered instead.
-
-The macOS build is a different story: it is signed and notarized, and opens
-without a prompt.
+Windows binaries are unsigned and may show a SmartScreen warning. The macOS
+release workflow signs and notarises the app and packages it in a DMG.
 
 ## Playing in a browser
 
@@ -191,21 +185,22 @@ The game also builds to WebAssembly, which is how it is published on itch.io.
 That needs [Trunk](https://trunkrs.dev):
 
 ```sh
+rustup target add wasm32-unknown-unknown
 cargo install --locked trunk
 cd crates/queens_app
 trunk serve --release --open   # play it locally
 trunk build --release          # dist/ is what itch.io wants, zipped
 ```
 
-The bundle is about 20 MB, or 6.3 MB over the wire once the server compresses
-it. Give it a viewport of at least 840x700: below that the board header wraps
-at 12x12, and the How to Play screen loses its Back and Next buttons.
+Use a viewport of at least 840x700 to keep the largest boards and How to Play
+controls visible.
 
-Two things differ from the desktop build. Settings, statistics and the resumed
+Compared with the desktop build, settings, statistics and the resumed
 game live in that page's local storage rather than in a file, so they are
 per-browser, and a private window always starts fresh. There is no update check
-and no Quit button, because the page is always the current version and the tab
-is the browser's to close.
+and no Quit button. Sound starts after interaction with the page. Large-board
+generation can temporarily stall the browser; see the
+[known generation limits](DESIGN.md#generation-budgets-and-fallbacks).
 
 ## The generator tool
 
@@ -220,9 +215,11 @@ cargo run -p queens_cli --release -- generate --size 9 --difficulty hard --solut
 cargo run -p queens_cli --release -- bench --sizes 5-12 --difficulties all --count 20
 ```
 
-`bench` checks each puzzle for a unique solution, contiguous regions, a rating
-that still holds on a fresh solve, and byte-identical regeneration from its seed.
-It exits non-zero if any puzzle fails.
+`bench` checks uniqueness, region structure and minimum area, the stored
+solution, rating consistency and deterministic regeneration. It accepts an
+unrated fallback labelled Expert, but fails on a region-size violation. It exits
+non-zero if any check fails. Contributor validation commands live in
+[AGENTS.md](AGENTS.md#commands-and-verification).
 
 ## Credits
 
@@ -230,13 +227,8 @@ Set in [Space Grotesk](https://github.com/floriankarsten/space-grotesk),
 embedded in the binary under its SIL Open Font Licence
 (`crates/queens_app/assets/fonts/OFL.txt`).
 
-## Layout
+## Further reading
 
-| Crate | What it is |
-|---|---|
-| `queens_core` | Board, rules, solvers and the generator. No Bevy dependency. |
-| `queens_cli` | `queens-gen`, the headless generator and benchmark tool. |
-| `queens_app` | `queens`, the game. |
-
-Further reading: [DESIGN.md](DESIGN.md) for why it is built this way,
-[INVENTORY.md](INVENTORY.md) for a file-by-file map.
+- [INVENTORY.md](INVENTORY.md): crate layout and file-by-file map.
+- [DESIGN.md](DESIGN.md): architecture and known trade-offs.
+- [AGENTS.md](AGENTS.md): contributor workflow and verification.

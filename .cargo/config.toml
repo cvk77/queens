@@ -12,5 +12,5 @@ rustdocflags = ["-Clinker=rust-lld.exe"]
 # The dev profile is only bearable with dynamic linking, so make the fast path
 # the short one.
 play = "run -p queens_app --features dev"
-# The generator audit from CLAUDE.md's "Verifying changes".
-audit = "run -p queens_cli --release -- bench --sizes 5-12 --difficulties all --count 20"
+# The generator audit from AGENTS.md's "Commands and verification".
+audit-puzzles = "run -p queens_cli --release -- bench --sizes 5-12 --difficulties all --count 20"
