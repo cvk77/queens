@@ -37,7 +37,7 @@ jobs:
             os: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # First, and before anything is installed or restored: formatting needs
       # nothing but the toolchain, so a formatting failure should cost seconds.
@@ -85,7 +85,7 @@ jobs:
     name: Audit generated puzzles
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
@@ -131,7 +131,7 @@ jobs:
             os: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
