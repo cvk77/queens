@@ -43,6 +43,9 @@ pub struct PaintStroke {
 struct Stroke {
     /// The cell the pointer went down on.
     origin: Entity,
+    /// The button that pressed `origin`, so a second button's release
+    /// mid-sweep cannot be mistaken for this stroke's own end.
+    button: PointerButton,
     /// What the sweep lays down, decided from `origin` at press time.
     mark: Mark,
     /// Where the press landed, which is what [`SWEEP_THRESHOLD_PX`] is
@@ -74,9 +77,10 @@ struct Paint {
 
 impl PaintStroke {
     /// A press on `origin` has begun moving. Nothing is painted yet.
-    fn begin(&mut self, origin: Entity, mark: Mark, pressed_at: Vec2) {
+    fn begin(&mut self, origin: Entity, button: PointerButton, mark: Mark, pressed_at: Vec2) {
         self.stroke = Some(Stroke {
             origin,
+            button,
             mark,
             pressed_at,
             pending: None,
@@ -133,15 +137,17 @@ impl PaintStroke {
         }
     }
 
-    /// The gesture is over. Returns the cell owed a click.
+    /// The gesture is over. Returns the cell owed a click and the button that
+    /// pressed it, so the caller can ignore a `DragEnd` from some other
+    /// button arriving mid-sweep.
     ///
     /// Bevy sends `Click` only to an entity the pointer is still over, so a
     /// tap that slid onto a neighbour before releasing produces none at all.
     /// `DragEnd` is reported against the cell that was pressed either way,
     /// which makes it the one dependable end of a gesture.
-    fn finish(&mut self) -> Option<Entity> {
+    fn finish(&mut self) -> Option<(Entity, PointerButton)> {
         let stroke = self.stroke.take()?;
-        (!stroke.painted && !stroke.clicked).then_some(stroke.origin)
+        (!stroke.painted && !stroke.clicked).then_some((stroke.origin, stroke.button))
     }
 }
 
@@ -224,7 +230,7 @@ pub fn on_cell_drag_start(
         Mark::Cross => Mark::Empty,
         _ => Mark::Cross,
     };
-    stroke.begin(target, mark, drag.pointer_location.position);
+    stroke.begin(target, drag.button, mark, drag.pointer_location.position);
 }
 
 /// Continues a sweep onto each cell the pointer crosses.
@@ -286,10 +292,10 @@ pub fn on_cell_drag_end(
 ) {
     // Always end the stroke, whatever the state of play, so nothing of this
     // gesture is left to confuse the next one.
-    let Some(origin) = stroke.finish() else {
+    let Some((origin, started_with)) = stroke.finish() else {
         return;
     };
-    if *play_state.get() != PlayState::Active {
+    if *play_state.get() != PlayState::Active || drag.button != started_with {
         return;
     }
     let Ok(cell) = cells.get(origin) else {
@@ -400,7 +406,7 @@ mod tests {
         let (a, ..) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
         // Bevy sends Drag events throughout; none of them leave the cell.
         assert!(stroke.extend(a, DRIFT).is_none(), "a wiggle must not paint");
         assert!(stroke.click(), "a wiggle must not swallow its own click");
@@ -414,14 +420,14 @@ mod tests {
         let (a, b, _) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
         assert!(
             stroke.extend(b, DRIFT).is_none(),
             "a drift of a few pixels is not a sweep"
         );
         assert_eq!(
             stroke.finish(),
-            Some(a),
+            Some((a, PointerButton::Primary)),
             "the cell that was pressed is owed the click"
         );
     }
@@ -435,7 +441,7 @@ mod tests {
         let mut stroke = PaintStroke::default();
 
         for _ in 0..4 {
-            stroke.begin(a, Mark::Cross, PRESS);
+            stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
             assert!(stroke.click());
             assert_eq!(stroke.finish(), None, "the click already landed");
         }
@@ -445,7 +451,7 @@ mod tests {
     fn leaving_the_cell_starts_a_sweep_and_paints_the_origin_too() {
         let (a, b, c) = cells();
         let mut stroke = PaintStroke::default();
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
 
         // The first cell the sweep reaches also settles the one it began on,
         // which was deliberately left alone until now.
@@ -467,7 +473,7 @@ mod tests {
     fn a_sweep_catches_up_the_cell_it_wobbled_through() {
         let (a, b, c) = cells();
         let mut stroke = PaintStroke::default();
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
 
         assert!(stroke.extend(b, DRIFT).is_none());
         let paint = stroke.extend(c, FAR).expect("this is a sweep now");
@@ -486,7 +492,7 @@ mod tests {
         let (a, b, _) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
         stroke.extend(b, FAR);
         // Sweeping back and releasing on the starting cell reports a click,
         // which belongs to the sweep rather than to the player.
@@ -502,9 +508,26 @@ mod tests {
         let (a, b, _) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Empty, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Empty, PRESS);
         let paint = stroke.extend(b, FAR).unwrap();
         assert_eq!(paint.mark, Mark::Empty);
+    }
+
+    /// A right-button press racing in while a left-button sweep is still in
+    /// flight must not be mistaken for that sweep's own end — `finish` hands
+    /// back the button that actually started the stroke so the caller can
+    /// tell the two apart.
+    #[test]
+    fn finish_reports_the_button_that_began_the_stroke() {
+        let (a, ..) = cells();
+        let mut stroke = PaintStroke::default();
+
+        stroke.begin(a, PointerButton::Secondary, Mark::Cross, PRESS);
+        assert_eq!(
+            stroke.finish(),
+            Some((a, PointerButton::Secondary)),
+            "the button that pressed the cell, not whichever released"
+        );
     }
 
     /// A cancelled drag never gets its `DragEnd`. Its verdict must not linger
@@ -514,7 +537,7 @@ mod tests {
         let (a, b, _) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
         stroke.extend(b, FAR);
         assert!(!stroke.click(), "the sweep's own click is swallowed");
         // No DragEnd arrives, and the next click is a genuine one.
@@ -528,7 +551,7 @@ mod tests {
         let (a, b, _) = cells();
         let mut stroke = PaintStroke::default();
 
-        stroke.begin(a, Mark::Cross, PRESS);
+        stroke.begin(a, PointerButton::Primary, Mark::Cross, PRESS);
         stroke.extend(b, FAR);
         assert_eq!(stroke.finish(), None);
     }
