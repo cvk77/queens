@@ -447,12 +447,19 @@ pub fn snap_board_size(
 /// space, which would knock the visible mark off centre.
 pub fn refresh_board(
     mut commands: Commands,
-    session: Res<Session>,
+    session: Option<Res<Session>>,
     save: Res<SaveData>,
     play_state: Res<State<PlayState>>,
     mut cells: Query<(Entity, &Cell, &Children, &mut Outline, &mut BackgroundColor)>,
     mut marks: Query<(&mut Node, Has<QueenMark>, Has<CrossMark>)>,
 ) {
+    // Leaving the game entirely (not just resuming) also runs this as
+    // `OnExit(PlayState::Paused)`, and can race `leave_game`'s removal of
+    // `Session` within the same frame's exit schedules.
+    let Some(session) = session else {
+        return;
+    };
+
     if !session.is_changed() && !save.is_changed() && !play_state.is_changed() {
         return;
     }
