@@ -449,14 +449,15 @@ pub fn refresh_board(
     mut commands: Commands,
     session: Option<Res<Session>>,
     save: Res<SaveData>,
-    play_state: Res<State<PlayState>>,
+    play_state: Option<Res<State<PlayState>>>,
     mut cells: Query<(Entity, &Cell, &Children, &mut Outline, &mut BackgroundColor)>,
     mut marks: Query<(&mut Node, Has<QueenMark>, Has<CrossMark>)>,
 ) {
     // Leaving the game entirely (not just resuming) also runs this as
-    // `OnExit(PlayState::Paused)`, and can race `leave_game`'s removal of
-    // `Session` within the same frame's exit schedules.
-    let Some(session) = session else {
+    // `OnExit(PlayState::Paused)`: the sub-state is being torn down rather
+    // than just changing value, so both `Session` and `State<PlayState>`
+    // itself are already gone by the time this system runs.
+    let (Some(session), Some(play_state)) = (session, play_state) else {
         return;
     };
 
