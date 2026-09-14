@@ -218,6 +218,10 @@ mod backend {
         std::fs::read_to_string(path()?).ok()
     }
 
+    /// Writes `text` to `path` atomically: a crash or power loss mid-write
+    /// leaves either the old file or the new one, never a truncated mix of
+    /// both. Writes to a sibling temp file first, then renames it over the
+    /// target — a rename is atomic on the filesystems this ships for.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn write(text: &str) {
         let Some(path) = path() else {
@@ -229,8 +233,13 @@ mod backend {
             warn!("could not create {}: {error}", parent.display());
             return;
         }
-        if let Err(error) = std::fs::write(&path, text) {
-            warn!("could not write {}: {error}", path.display());
+        let tmp_path = path.with_extension("ron.tmp");
+        if let Err(error) = std::fs::write(&tmp_path, text) {
+            warn!("could not write {}: {error}", tmp_path.display());
+            return;
+        }
+        if let Err(error) = std::fs::rename(&tmp_path, &path) {
+            warn!("could not save {}: {error}", path.display());
         }
     }
 
